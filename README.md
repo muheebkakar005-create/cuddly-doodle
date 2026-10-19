@@ -23,7 +23,7 @@ Open [http://localhost:3000](http://localhost:3000).
 ### Super Admin
 
 - Email: `muheebkakar005@gmail.com`
-- Password: `Adminmuheeb`
+- Password: `*********`
 - Panel: `/admin` — shop approvals, salon CRUD, appointment board
 
 ### Demo shop owner
