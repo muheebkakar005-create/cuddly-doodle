@@ -14,7 +14,7 @@ const display = Fraunces({
   variable: "--font-display",
 });
 
-const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://cuddly-doodle-jh1y.vercel.app";
+const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://qsalons.vercel.app";
 
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),
