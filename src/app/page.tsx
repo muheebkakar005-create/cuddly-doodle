@@ -1,8 +1,11 @@
 import Image from "next/image";
 import Link from "next/link";
 import { AREAS } from "@/lib/constants";
-import { prisma } from "@/lib/prisma";
+import { Prisma } from "@prisma/client";
+import { prisma, withRetry } from "@/lib/prisma";
 import { sortByRank } from "@/lib/rank";
+
+type SalonWithServices = Prisma.SalonGetPayload<{ include: { services: true } }>;
 import { SalonCard } from "@/components/SalonCard";
 import { StarIcon } from "@/components/Icons";
 
@@ -77,12 +80,18 @@ const SPECIALISTS = [
 ];
 
 export default async function HomePage() {
-  const featured = sortByRank(
-    await prisma.salon.findMany({
-      where: { approvalStatus: "APPROVED" },
-      include: { services: true },
-    })
-  ).slice(0, 6);
+  let featured: SalonWithServices[] = [];
+  try {
+    const raw = await withRetry(() =>
+      prisma.salon.findMany({
+        where: { approvalStatus: "APPROVED" },
+        include: { services: true },
+      })
+    );
+    featured = sortByRank(raw).slice(0, 6);
+  } catch (error) {
+    console.error("Failed to query featured salons:", error);
+  }
 
   return (
     <div className="space-y-5 pb-16">

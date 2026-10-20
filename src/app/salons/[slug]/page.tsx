@@ -3,23 +3,47 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { CATEGORY_LABELS } from "@/lib/constants";
 import { formatTime12, isOpenNow } from "@/lib/format";
-import { prisma } from "@/lib/prisma";
+import { prisma, withRetry } from "@/lib/prisma";
 import { whatsappChatUrl } from "@/lib/whatsapp";
 import { ChevronLeftIcon, StarIcon, WhatsAppIcon } from "@/components/Icons";
 import { BookingEngine } from "./BookingEngine";
 
 export const dynamic = "force-dynamic";
 
+export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }) {
+  const { slug } = await params;
+  try {
+    const salon = await prisma.salon.findUnique({
+      where: { slug },
+      select: { name: true, quettaArea: true, category: true, imageUrl: true },
+    });
+    if (!salon) return { title: "Salon Not Found" };
+    return {
+      title: `${salon.name} – ${salon.quettaArea}, Quetta`,
+      description: `Book appointments at ${salon.name} in ${salon.quettaArea}, Quetta. Compare PKR pricing, browse staff, and confirm on WhatsApp.`,
+      openGraph: {
+        title: `${salon.name} | Q_Salons Quetta`,
+        description: `Book at ${salon.name} in ${salon.quettaArea}, Quetta.`,
+        images: [salon.imageUrl || "/logo-web.png"],
+      },
+    };
+  } catch {
+    return { title: "Salon Details | Q_Salons Quetta" };
+  }
+}
+
 export default async function SalonPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
-  const salon = await prisma.salon.findUnique({
-    where: { slug },
-    include: {
-      services: true,
-      staff: true,
-      reviews: { orderBy: { createdAt: "desc" }, take: 12 },
-    },
-  });
+  const salon = await withRetry(() =>
+    prisma.salon.findUnique({
+      where: { slug },
+      include: {
+        services: true,
+        staff: true,
+        reviews: { orderBy: { createdAt: "desc" }, take: 12 },
+      },
+    })
+  );
   if (!salon || salon.approvalStatus !== "APPROVED") notFound();
 
   await prisma.salon.update({

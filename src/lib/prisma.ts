@@ -6,15 +6,14 @@ export const prisma =
   globalForPrisma.prisma ??
   new PrismaClient({
     log: process.env.NODE_ENV === "development" ? ["error", "warn"] : ["error"],
-    // Neon serverless: keep connections alive and retry on cold start
-    datasourceUrl: process.env.DATABASE_URL,
+    ...(process.env.DATABASE_URL ? { datasourceUrl: process.env.DATABASE_URL } : {}),
   });
 
 if (process.env.NODE_ENV !== "production") globalForPrisma.prisma = prisma;
 
 /**
  * Retry a Prisma operation up to `retries` times.
- * Handles Neon cold-start drops gracefully.
+ * Handles Neon cold-start and connection pooling hiccups gracefully.
  */
 export async function withRetry<T>(
   fn: () => Promise<T>,
@@ -31,8 +30,11 @@ export async function withRetry<T>(
       const isRetryable =
         msg.includes("Can't reach database") ||
         msg.includes("Connection closed") ||
-        msg.includes("kind: Closed");
-      if (!isRetryable) throw err;
+        msg.includes("kind: Closed") ||
+        msg.includes("connection pool") ||
+        msg.includes("ConnectionReset") ||
+        msg.includes("P2024");
+      if (!isRetryable || i === retries - 1) throw err;
       // Wait before retrying
       await new Promise((r) => setTimeout(r, delayMs * (i + 1)));
       // Reconnect

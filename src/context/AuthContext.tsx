@@ -1,7 +1,6 @@
 "use client";
 
 import React, { createContext, useContext, useEffect, useState, useCallback } from "react";
-import { useRouter } from "next/navigation";
 
 export type AuthUser = {
   id: string;
@@ -28,7 +27,6 @@ const LOCAL_STORAGE_KEY = "qsc_auth_session";
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [loading, setLoading] = useState(true);
-  const router = useRouter();
 
   // 1. Refresh / Sync session with backend (/api/auth/me)
   const refreshSession = useCallback(async () => {
