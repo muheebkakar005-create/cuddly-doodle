@@ -1,0 +1,177 @@
+@import "tailwindcss";
+
+/* =========================================================
+   Q_Salons Brand Color System
+   Midnight Blue  #081838
+   Gold           #DAaf37
+   Ivory          #F5F3EE
+   Charcoal       #1A1A1A
+   Booking Green  #18A34A
+   ========================================================= */
+
+:root {
+  --ink:            #ffffff;
+  --ink-soft:       #c8c8d0;
+  --cream:          #0c0c0e;
+  --paper:          #16161d;
+  --sand:           rgba(255, 255, 255, 0.12);
+  --gold:           #e5c378;
+  --gold-bright:    #f3d592;
+  --sage:           #4ade80;
+  --muted:          #9e9eaa;
+  --surface:        #16161d;
+  --surface-card:   #1c1c24;
+  --surface-pill:   #252530;
+  --burgundy:       #a82e2e;
+  --burgundy-deep:  #781c1c;
+}
+
+@theme inline {
+  --color-ink:      var(--ink);
+  --color-ink-soft: var(--ink-soft);
+  --color-cream:    var(--cream);
+  --color-paper:    var(--paper);
+  --color-sand:     var(--sand);
+  --color-burgundy: var(--burgundy);
+  --color-gold:     var(--gold);
+  --color-sage:     var(--sage);
+  --color-muted:    var(--muted);
+  --font-sans:      var(--font-dm);
+  --font-display:   var(--font-dm);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+  color-scheme: dark;
+}
+
+body {
+  background: #0c0c0e;
+  color: #ffffff;
+  font-family: var(--font-dm), -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Typography */
+h1,
+h2,
+h3,
+.font-display {
+  font-family: var(--font-dm), -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  letter-spacing: -0.02em;
+}
+
+/* Hero gradient — original dark luxury theme */
+.hero-mesh {
+  background:
+    radial-gradient(1000px 500px at 10% -10%, rgba(229, 195, 120, 0.15), transparent 50%),
+    radial-gradient(800px 400px at 90% 10%, rgba(168, 46, 46, 0.25), transparent 45%),
+    linear-gradient(160deg, #0c0c0e 0%, #16161d 48%, #1c1c24 100%);
+}
+
+/* Card hover lift */
+.card-lift {
+  transition: transform 0.25s ease, box-shadow 0.25s ease, border-color 0.25s ease;
+}
+.card-lift:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(218, 175, 55, 0.15);
+  border-color: rgba(218, 175, 55, 0.25);
+}
+
+/* Range slider */
+input[type="range"] {
+  accent-color: var(--gold);
+}
+
+/* Form controls: dark luxury */
+input:not([type="checkbox"]):not([type="radio"]):not([type="submit"]):not([type="button"]):not([type="color"]),
+select,
+textarea {
+  background-color: #1c1c24 !important;
+  color: #ffffff !important;
+  border-color: rgba(255, 255, 255, 0.12);
+}
+
+input[type="checkbox"],
+input[type="radio"] {
+  accent-color: #DAaf37;
+}
+
+::placeholder {
+  color: rgba(255, 255, 255, 0.4) !important;
+}
+
+/* Q_Salons gold shimmer animation for premium elements */
+@keyframes gold-shimmer {
+  0%   { background-position: -200% center; }
+  100% { background-position: 200% center; }
+}
+.gold-shimmer {
+  background: linear-gradient(
+    90deg,
+    #DAaf37 0%,
+    #f0c94a 40%,
+    #DAaf37 60%,
+    #b8901e 100%
+  );
+  background-size: 200% auto;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  animation: gold-shimmer 3s linear infinite;
+}
+
+/* Booking green pulse for live/active states */
+@keyframes green-pulse {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.5; }
+}
+.live-dot {
+  background: var(--booking-green);
+  animation: green-pulse 2s ease-in-out infinite;
+}
+
+/* Compact label utility */
+.compact-label {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: rgba(255, 255, 255, 0.65);
+}
+
+/* Scrollbar hide */
+.no-scrollbar::-webkit-scrollbar { display: none; }
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+/* Q_Salons surface card style */
+.q-card {
+  background: var(--surface-card);
+  border: 1px solid rgba(218, 175, 55, 0.12);
+  border-radius: 1rem;
+}
+.q-card:hover {
+  border-color: rgba(218, 175, 55, 0.3);
+}
+
+/* Q_Salons gold button */
+.btn-gold {
+  background: linear-gradient(135deg, #DAaf37, #b8901e);
+  color: #081838;
+  font-weight: 700;
+  border-radius: 9999px;
+  transition: opacity 0.2s, transform 0.2s;
+}
+.btn-gold:hover {
+  opacity: 0.9;
+  transform: translateY(-1px);
+}

@@ -1,0 +1,41 @@
+{
+  "name": "Q_Salons – Every Salon. One Booking Platform.",
+  "short_name": "Q_Salons",
+  "description": "Book barber shops, ladies parlors and luxury spas across Quetta, Balochistan. Compare prices in PKR and confirm on WhatsApp.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#081838",
+  "theme_color": "#DAaf37",
+  "orientation": "portrait",
+  "categories": ["lifestyle", "shopping", "beauty"],
+  "lang": "en-PK",
+  "icons": [
+    {
+      "src": "/logo-app.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/logo-app.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ],
+  "screenshots": [],
+  "shortcuts": [
+    {
+      "name": "Explore Salons",
+      "short_name": "Explore",
+      "url": "/explore",
+      "icons": [{ "src": "/logo-icon.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "My Bookings",
+      "short_name": "Bookings",
+      "url": "/bookings",
+      "icons": [{ "src": "/logo-icon.png", "sizes": "192x192" }]
+    }
+  ]
+}
