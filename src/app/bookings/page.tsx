@@ -32,10 +32,23 @@ export default function BookingsPage() {
 
   async function load(p: string) {
     setLoading(true);
+    setError("");
     try {
-      const res = await fetch(`/api/appointments?phone=${encodeURIComponent(p)}`);
+      let idsQuery = "";
+      try {
+        const savedIds: string[] = JSON.parse(localStorage.getItem("qsc_bookings") || "[]");
+        if (savedIds.length > 0) {
+          idsQuery = `&ids=${encodeURIComponent(savedIds.join(","))}`;
+        }
+      } catch {}
+      const res = await fetch(`/api/appointments?phone=${encodeURIComponent(p)}${idsQuery}`);
       const data = await res.json();
-      setRows(data.appointments || []);
+      if (!res.ok) {
+        setError(data.error || "Failed to load appointments.");
+        setRows([]);
+      } else {
+        setRows(data.appointments || []);
+      }
       setSearched(true);
     } catch {
       setError("Failed to load appointments. Please retry.");

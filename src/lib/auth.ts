@@ -77,7 +77,7 @@ export function canManageSalon(session: SessionUser | null, salonId: string) {
 }
 
 export function sessionCookieOptions() {
-  const isHttps = process.env.SECURE_COOKIES === "true";
+  const isHttps = process.env.NODE_ENV === "production" || process.env.SECURE_COOKIES === "true";
   return {
     name: SESSION_COOKIE,
     httpOnly: true,

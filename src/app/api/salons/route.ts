@@ -1,50 +1,62 @@
 import { NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
+import { prisma, withRetry } from "@/lib/prisma";
 import { getSession, isAdmin } from "@/lib/auth";
 import { PRICE_MAX, PRICE_MIN } from "@/lib/constants";
 import { sortByRank } from "@/lib/rank";
 import { slugify } from "@/lib/slug";
 
+export const dynamic = "force-dynamic";
+
 export async function GET(req: Request) {
-  const { searchParams } = new URL(req.url);
-  const q = searchParams.get("q")?.trim() || "";
-  const category = searchParams.get("category") || "ALL";
-  const areas = searchParams.getAll("area");
-  const minPrice = Number(searchParams.get("minPrice") || PRICE_MIN);
-  const maxPrice = Number(searchParams.get("maxPrice") || PRICE_MAX);
-  const minRating = Number(searchParams.get("minRating") || 0);
-  const session = await getSession();
+  try {
+    const { searchParams } = new URL(req.url);
+    const q = searchParams.get("q")?.trim() || "";
+    const category = searchParams.get("category") || "ALL";
+    const areas = searchParams.getAll("area");
+    const minPrice = Number(searchParams.get("minPrice") || PRICE_MIN);
+    const maxPrice = Number(searchParams.get("maxPrice") || PRICE_MAX);
+    const minRating = Number(searchParams.get("minRating") || 0);
+    const session = await getSession();
 
-  const salons = await prisma.salon.findMany({
-    where: isAdmin(session) ? undefined : { approvalStatus: "APPROVED" },
-    include: { services: true, owner: true },
-    orderBy: { createdAt: "desc" },
-  });
+    const salons = await withRetry(() =>
+      prisma.salon.findMany({
+        where: isAdmin(session) ? undefined : { approvalStatus: "APPROVED" },
+        include: { services: true, owner: true },
+        orderBy: { createdAt: "desc" },
+      })
+    );
 
-  // If Super Admin is requesting without specific filters, return all salons directly
-  if (isAdmin(session) && !q && category === "ALL" && !areas.length && minRating === 0) {
-    return NextResponse.json({ salons });
+    // If Super Admin is requesting without specific filters, return all salons directly
+    if (isAdmin(session) && !q && category === "ALL" && !areas.length && minRating === 0) {
+      return NextResponse.json({ salons });
+    }
+
+    const filtered = sortByRank(
+      salons.filter((s) => {
+        if (category !== "ALL" && s.category !== category) return false;
+        if (areas.length && !areas.includes(s.quettaArea)) return false;
+        if (s.rating < minRating) return false;
+        const prices = s.services.map((sv) => sv.pricePkr);
+        if (prices.length > 0) {
+          const start = Math.min(...prices);
+          if (start < minPrice || start > maxPrice) return false;
+        }
+        if (q) {
+          const hay = `${s.name} ${s.quettaArea} ${s.address} ${s.services.map((sv) => sv.name).join(" ")}`.toLowerCase();
+          if (!hay.includes(q.toLowerCase())) return false;
+        }
+        return true;
+      }),
+    );
+
+    return NextResponse.json({ salons: filtered });
+  } catch (error) {
+    console.error("API /api/salons error:", error);
+    return NextResponse.json(
+      { error: "Failed to retrieve salons", salons: [] },
+      { status: 500 }
+    );
   }
-
-  const filtered = sortByRank(
-    salons.filter((s) => {
-      if (category !== "ALL" && s.category !== category) return false;
-      if (areas.length && !areas.includes(s.quettaArea)) return false;
-      if (s.rating < minRating) return false;
-      const prices = s.services.map((sv) => sv.pricePkr);
-      if (prices.length > 0) {
-        const start = Math.min(...prices);
-        if (start < minPrice || start > maxPrice) return false;
-      }
-      if (q) {
-        const hay = `${s.name} ${s.quettaArea} ${s.address} ${s.services.map((sv) => sv.name).join(" ")}`.toLowerCase();
-        if (!hay.includes(q.toLowerCase())) return false;
-      }
-      return true;
-    }),
-  );
-
-  return NextResponse.json({ salons: filtered });
 }
 
 export async function POST(req: Request) {

@@ -34,22 +34,32 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
 
 export default async function SalonPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
-  const salon = await withRetry(() =>
-    prisma.salon.findUnique({
-      where: { slug },
-      include: {
-        services: true,
-        staff: true,
-        reviews: { orderBy: { createdAt: "desc" }, take: 12 },
-      },
-    })
-  );
+  let salon = null;
+  try {
+    salon = await withRetry(() =>
+      prisma.salon.findUnique({
+        where: { slug },
+        include: {
+          services: true,
+          staff: true,
+          reviews: { orderBy: { createdAt: "desc" }, take: 12 },
+        },
+      })
+    );
+  } catch (error) {
+    console.error("Database error looking up salon slug:", slug, error);
+  }
+
   if (!salon || salon.approvalStatus !== "APPROVED") notFound();
 
-  await prisma.salon.update({
-    where: { id: salon.id },
-    data: { viewCount: { increment: 1 } },
-  });
+  try {
+    await prisma.salon.update({
+      where: { id: salon.id },
+      data: { viewCount: { increment: 1 } },
+    });
+  } catch (err) {
+    console.warn("Could not increment salon viewCount:", err);
+  }
 
   const gallery: string[] = JSON.parse(salon.galleryJson || "[]");
   const images = gallery.length ? gallery : [salon.imageUrl];

@@ -1,20 +1,29 @@
 import { NextResponse } from "next/server";
 import { Prisma } from "@prisma/client";
-import { prisma } from "@/lib/prisma";
+import { prisma, withRetry } from "@/lib/prisma";
 import { canManageSalon, getAdminSession, getSession, isAdmin } from "@/lib/auth";
+
+export const dynamic = "force-dynamic";
 
 export async function GET(_: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const salon = await prisma.salon.findFirst({
-    where: { OR: [{ id }, { slug: id }] },
-    include: { services: true, staff: true, reviews: { orderBy: { createdAt: "desc" }, take: 20 } },
-  });
-  if (!salon) return NextResponse.json({ error: "Not found" }, { status: 404 });
-  const session = await getSession();
-  if (salon.approvalStatus !== "APPROVED" && !canManageSalon(session, salon.id)) {
-    return NextResponse.json({ error: "Not found" }, { status: 404 });
+  try {
+    const salon = await withRetry(() =>
+      prisma.salon.findFirst({
+        where: { OR: [{ id }, { slug: id }] },
+        include: { services: true, staff: true, reviews: { orderBy: { createdAt: "desc" }, take: 20 } },
+      })
+    );
+    if (!salon) return NextResponse.json({ error: "Not found" }, { status: 404 });
+    const session = await getSession();
+    if (salon.approvalStatus !== "APPROVED" && !canManageSalon(session, salon.id)) {
+      return NextResponse.json({ error: "Not found" }, { status: 404 });
+    }
+    return NextResponse.json({ salon });
+  } catch (error) {
+    console.error("GET /api/salons/[id] error:", error);
+    return NextResponse.json({ error: "Failed to retrieve salon" }, { status: 500 });
   }
-  return NextResponse.json({ salon });
 }
 
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
