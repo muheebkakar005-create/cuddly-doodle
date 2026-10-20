@@ -50,9 +50,6 @@ export function Footer() {
                 <WhatsAppIcon className="h-3 w-3 text-emerald-400" />
                 WhatsApp Confirmation
               </span>
-              <span className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-[#16161D] px-3 py-1 text-[11px] font-medium text-white/80">
-                Zero Advance Fees
-              </span>
             </div>
 
             {/* Quetta Location Note */}
@@ -171,8 +168,6 @@ export function Footer() {
         <div className="mx-auto flex max-w-6xl flex-col items-center justify-between gap-3 text-center sm:flex-row sm:text-left">
           <p>© {new Date().getFullYear()} Q_Salons (Quetta Salon Connect). All rights reserved.</p>
           <div className="flex flex-wrap items-center justify-center gap-4 text-[11px]">
-            <span>سلونز آف کوئٹہ</span>
-            <span>•</span>
             <span className="text-white/70">100% Free Booking</span>
             <span>•</span>
             <span className="text-gold font-medium">Balochistan</span>
