@@ -19,10 +19,20 @@ export function Header() {
   const [open, setOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [qrModalOpen, setQrModalOpen] = useState(false);
-  const [qrTab, setQrTab] = useState<"local" | "prod">("local");
+  const [qrTab, setQrTab] = useState<"local" | "prod">("prod");
   const searchContainerRef = useRef<HTMLDivElement>(null);
   const userMenuRef = useRef<HTMLDivElement>(null);
   const category = params.get("category") || "ALL";
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      if (window.location.hostname === "localhost" || window.location.hostname.startsWith("192.168.")) {
+        setQrTab("local");
+      } else {
+        setQrTab("prod");
+      }
+    }
+  }, []);
 
   useEffect(() => {
     setQ(params.get("q") || "");
@@ -417,39 +427,36 @@ export function Header() {
 
       {/* 4. App QR Code Modal for Mobile Phone Scanning */}
       {qrModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md p-4 animate-in fade-in duration-200">
-          <div className="relative w-full max-w-sm rounded-3xl border border-white/15 bg-[#16161D] p-5 text-white shadow-2xl space-y-4">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2.5">
-                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-white text-black font-bold text-lg shadow-md">
+        <div
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setQrModalOpen(false);
+          }}
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-md p-3 sm:p-4 overflow-y-auto animate-in fade-in duration-200"
+        >
+          <div className="relative my-auto w-full max-w-sm max-h-[92vh] overflow-y-auto rounded-3xl border border-white/20 bg-[#16161D] p-4 sm:p-5 text-white shadow-2xl space-y-3.5 no-scrollbar">
+            {/* Header with Title and Close Button */}
+            <div className="flex items-center justify-between sticky top-0 bg-[#16161D] pb-1 z-10 border-b border-white/10">
+              <div className="flex items-center gap-2">
+                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white text-black font-bold text-base shadow-md">
                   📷
                 </div>
                 <div>
-                  <h3 className="text-sm font-bold text-white">Scan App QR Code</h3>
-                  <p className="text-[10px] text-gold font-medium">Open instantly on your mobile phone</p>
+                  <h3 className="text-sm font-bold text-white leading-tight">Scan App QR Code</h3>
+                  <p className="text-[10px] text-gold font-medium">Direct mobile install</p>
                 </div>
               </div>
               <button
                 type="button"
                 onClick={() => setQrModalOpen(false)}
-                className="h-8 w-8 rounded-full bg-white/10 text-white/70 hover:text-white flex items-center justify-center text-xs transition-colors cursor-pointer"
+                className="h-8 w-8 rounded-full bg-white/10 text-white/70 hover:bg-white/20 hover:text-white flex items-center justify-center text-sm font-bold transition-colors cursor-pointer"
                 aria-label="Close modal"
               >
                 ✕
               </button>
             </div>
 
-            {/* Toggle Tabs: Local Wi-Fi vs Online Production */}
+            {/* Toggle Tabs: Online Production vs Local Wi-Fi */}
             <div className="flex rounded-xl bg-black/50 p-1 border border-white/10 text-xs">
-              <button
-                type="button"
-                onClick={() => setQrTab("local")}
-                className={`flex-1 rounded-lg py-1.5 font-semibold transition-all ${
-                  qrTab === "local" ? "bg-white text-black shadow-sm" : "text-white/60 hover:text-white"
-                }`}
-              >
-                📶 Local Wi-Fi
-              </button>
               <button
                 type="button"
                 onClick={() => setQrTab("prod")}
@@ -459,13 +466,22 @@ export function Header() {
               >
                 🌐 Online (Vercel)
               </button>
+              <button
+                type="button"
+                onClick={() => setQrTab("local")}
+                className={`flex-1 rounded-lg py-1.5 font-semibold transition-all ${
+                  qrTab === "local" ? "bg-white text-black shadow-sm" : "text-white/60 hover:text-white"
+                }`}
+              >
+                📶 Local Wi-Fi
+              </button>
             </div>
 
             {/* QR Image Preview */}
-            <div className="flex flex-col items-center justify-center rounded-2xl bg-white p-4 shadow-inner">
-              <div className="relative h-56 w-56">
+            <div className="flex flex-col items-center justify-center rounded-2xl bg-white p-3.5 shadow-inner">
+              <div className="relative h-44 w-44 sm:h-48 sm:w-48">
                 <Image
-                  src={qrTab === "local" ? "/qr-app-local.png" : "/qr-app-prod.png"}
+                  src={qrTab === "prod" ? "/qr-app-prod.png" : "/qr-app-local.png"}
                   alt="Q_Salons App QR Code"
                   fill
                   className="rounded-lg object-contain"
@@ -473,25 +489,34 @@ export function Header() {
                 />
               </div>
               <p className="mt-2 text-[11px] font-bold text-black text-center break-all select-all">
-                {qrTab === "local" ? "http://192.168.69.151:3000/install" : "https://qsalons.vercel.app/install"}
+                {qrTab === "prod" ? "https://qsalons.vercel.app/install" : "http://192.168.69.151:3000/install"}
               </p>
             </div>
 
-            <p className="text-center text-xs text-white/70">
+            <p className="text-center text-[11px] text-white/70 leading-relaxed">
               Point your phone&apos;s camera at the QR code to directly open and install the app on your mobile screen!
             </p>
 
-            <button
-              type="button"
-              onClick={() => {
-                const url = qrTab === "local" ? "http://192.168.69.151:3000/install" : "https://qsalons.vercel.app/install";
-                navigator.clipboard?.writeText(url);
-                alert("URL copied to clipboard: " + url);
-              }}
-              className="w-full rounded-2xl border border-white/15 bg-white/10 py-2.5 text-xs font-bold text-white hover:bg-white/20 transition-all cursor-pointer"
-            >
-              📋 Copy Link
-            </button>
+            <div className="flex gap-2 pt-1">
+              <button
+                type="button"
+                onClick={() => {
+                  const url = qrTab === "prod" ? "https://qsalons.vercel.app/install" : "http://192.168.69.151:3000/install";
+                  navigator.clipboard?.writeText(url);
+                  alert("URL copied: " + url);
+                }}
+                className="flex-1 rounded-2xl border border-white/15 bg-white/10 py-2.5 text-xs font-bold text-white hover:bg-white/20 active:scale-95 transition-all cursor-pointer"
+              >
+                📋 Copy Link
+              </button>
+              <button
+                type="button"
+                onClick={() => setQrModalOpen(false)}
+                className="rounded-2xl bg-white px-5 py-2.5 text-xs font-bold text-black hover:bg-white/90 active:scale-95 transition-all cursor-pointer"
+              >
+                Close
+              </button>
+            </div>
           </div>
         </div>
       )}
