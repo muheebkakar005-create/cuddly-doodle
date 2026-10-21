@@ -4,14 +4,14 @@ import Image from "next/image";
 export function Logo({ mobileOnly = false }: { mobileOnly?: boolean }) {
   if (mobileOnly) {
     return (
-      <Link href="/" className="flex items-center shrink-0">
+      <Link href="/" className="flex items-center shrink-0 pr-1" aria-label="Q_Salons Home">
         <Image
           src="/logo-mobile.png"
           alt="Q Salons"
-          width={40}
-          height={40}
+          width={36}
+          height={36}
           priority
-          className="h-8 w-auto object-contain"
+          className="h-8 w-auto object-contain rounded-lg"
         />
       </Link>
     );
