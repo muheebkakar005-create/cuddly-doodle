@@ -473,18 +473,18 @@ export function Header() {
                 />
               </div>
               <p className="mt-2 text-[11px] font-bold text-black text-center break-all select-all">
-                {qrTab === "local" ? "http://192.168.69.151:3000" : "https://qsalons.vercel.app"}
+                {qrTab === "local" ? "http://192.168.69.151:3000/install" : "https://qsalons.vercel.app/install"}
               </p>
             </div>
 
             <p className="text-center text-xs text-white/70">
-              Point your phone&apos;s camera at the QR code to open and install the app on your mobile screen!
+              Point your phone&apos;s camera at the QR code to directly open and install the app on your mobile screen!
             </p>
 
             <button
               type="button"
               onClick={() => {
-                const url = qrTab === "local" ? "http://192.168.69.151:3000" : "https://qsalons.vercel.app";
+                const url = qrTab === "local" ? "http://192.168.69.151:3000/install" : "https://qsalons.vercel.app/install";
                 navigator.clipboard?.writeText(url);
                 alert("URL copied to clipboard: " + url);
               }}

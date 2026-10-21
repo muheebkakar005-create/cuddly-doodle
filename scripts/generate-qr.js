@@ -1,22 +1,21 @@
 /* eslint-disable */
 const QRCode = require('qrcode');
-const fs = require('fs');
 const path = require('path');
 
 async function generate() {
-  const localUrl = 'http://192.168.69.151:3000';
-  const prodUrl = 'https://qsalons.vercel.app';
+  const localUrl = 'http://192.168.69.151:3000/install';
+  const prodUrl = 'https://qsalons.vercel.app/install';
 
   const opts = {
     errorCorrectionLevel: 'H',
     type: 'image/png',
-    quality: 0.95,
+    quality: 0.98,
     margin: 2,
     color: {
       dark: '#0C0C0E',
       light: '#FFFFFF',
     },
-    width: 600,
+    width: 650,
   };
 
   const localPath = path.join(__dirname, '..', 'public', 'qr-app-local.png');
@@ -25,13 +24,18 @@ async function generate() {
   await QRCode.toFile(localPath, localUrl, opts);
   await QRCode.toFile(prodPath, prodUrl, opts);
 
-  console.log('Local QR created at:', localPath);
-  console.log('Prod QR created at:', prodPath);
+  console.log('Local Install QR created at:', localPath);
+  console.log('Production Install QR created at:', prodPath);
 
-  // Generate terminal QR
-  const stringQR = await QRCode.toString(localUrl, { type: 'terminal', small: true });
-  console.log('\n--- SCAN WITH PHONE CAMERA (Same Wi-Fi) ---');
-  console.log(stringQR);
+  // Generate terminal QR for local Wi-Fi install
+  const stringLocalQR = await QRCode.toString(localUrl, { type: 'terminal', small: true });
+  console.log('\n--- SCAN WITH PHONE CAMERA TO DIRECTLY INSTALL (Local Wi-Fi) ---');
+  console.log(stringLocalQR);
+
+  // Generate terminal QR for Production
+  const stringProdQR = await QRCode.toString(prodUrl, { type: 'terminal', small: true });
+  console.log('\n--- SCAN WITH PHONE CAMERA TO DIRECTLY INSTALL (Online / Vercel) ---');
+  console.log(stringProdQR);
 }
 
 generate().catch(console.error);
