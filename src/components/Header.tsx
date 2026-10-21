@@ -320,6 +320,14 @@ export function Header() {
               🚪
             </button>
           )}
+          <button
+            type="button"
+            onClick={() => window.dispatchEvent(new Event("trigger-pwa-install"))}
+            className="flex h-8 w-8 items-center justify-center rounded-full bg-[#181820] border border-white/10 text-white hover:bg-white/20 transition-all shadow-sm cursor-pointer"
+            title="Install App on Phone"
+          >
+            <span className="text-xs">📱</span>
+          </button>
           <Link
             href="/explore"
             className="flex h-8 w-8 items-center justify-center rounded-full bg-[#181820] border border-white/10 text-white hover:bg-white/20 transition-all shadow-sm"

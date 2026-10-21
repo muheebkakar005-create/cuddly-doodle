@@ -163,10 +163,15 @@ export function Footer() {
         </div>
       </div>
 
-      {/* Bottom Bar — Copyright & Safe Area for Mobile Dock */}
+      {/* Bottom Bar — Copyright, Creator Credit & Safe Area for Mobile Dock */}
       <div className="border-t border-white/10 bg-[#08080A] px-4 py-6 pb-28 md:pb-6 text-xs text-white/50">
         <div className="mx-auto flex max-w-6xl flex-col items-center justify-between gap-3 text-center sm:flex-row sm:text-left">
-          <p>© {new Date().getFullYear()} Q_Salons (Quetta Salon Connect). All rights reserved.</p>
+          <div className="space-y-1">
+            <p>© {new Date().getFullYear()} Q_Salons (Quetta Salon Connect). All rights reserved.</p>
+            <p className="text-[11px] text-white/60">
+              Made by <span className="font-semibold text-white">Muheeb ullah kakar</span> &nbsp;|&nbsp; Company: <span className="font-semibold text-gold">Devbase</span>
+            </p>
+          </div>
           <div className="flex flex-wrap items-center justify-center gap-4 text-[11px]">
             <span className="text-white/70">100% Free Booking</span>
             <span>•</span>

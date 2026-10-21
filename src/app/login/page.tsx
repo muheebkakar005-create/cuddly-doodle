@@ -11,8 +11,8 @@ function LoginFormInner() {
   const searchParams = useSearchParams();
   const from = searchParams.get("from");
 
-  const [email, setEmail] = useState("muheebkakar005@gmail.com");
-  const [password, setPassword] = useState("Adminmuheeb");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
@@ -41,13 +41,13 @@ function LoginFormInner() {
 
   function fillSuperAdmin() {
     setEmail("muheebkakar005@gmail.com");
-    setPassword("Adminmuheeb");
+    setPassword("");
     setError("");
   }
 
   function fillShopOwner() {
     setEmail("owner@thehairlab.pk");
-    setPassword("Owner1234");
+    setPassword("");
     setError("");
   }
 

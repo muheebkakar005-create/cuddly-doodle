@@ -37,18 +37,30 @@ export const metadata: Metadata = {
     "Bridal Makeup Quetta",
     "Balochistan Salon Booking",
   ],
-  authors: [{ name: "Q_Salons Team", url: siteUrl }],
-  creator: "Q_Salons",
-  publisher: "Q_Salons",
+  authors: [
+    { name: "Muheeb ullah kakar", url: siteUrl },
+    { name: "Devbase", url: siteUrl }
+  ],
+  creator: "Muheeb ullah kakar (Devbase)",
+  publisher: "Devbase",
+  applicationName: "Q_Salons",
   manifest: "/manifest.json",
   icons: {
-    icon: "/logo-app.png",
-    apple: "/logo-app.png",
+    icon: [
+      { url: "/icons/icon-192.png", sizes: "192x192", type: "image/png" },
+      { url: "/icons/icon-512.png", sizes: "512x512", type: "image/png" },
+    ],
+    apple: [
+      { url: "/apple-touch-icon.png", sizes: "180x180", type: "image/png" },
+    ],
   },
   appleWebApp: {
     capable: true,
     statusBarStyle: "black-translucent",
     title: "Q_Salons",
+  },
+  formatDetection: {
+    telephone: false,
   },
   openGraph: {
     title: "Q_Salons – Style For Everyone | Quetta",
@@ -75,6 +87,8 @@ export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
   maximumScale: 1,
+  viewportFit: "cover",
+  userScalable: false,
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
@@ -94,6 +108,11 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en" className="dark bg-[#0C0C0E]">
       <head>
+        <meta name="mobile-web-app-capable" content="yes" />
+        <meta name="apple-mobile-web-app-capable" content="yes" />
+        <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+        <meta name="apple-mobile-web-app-title" content="Q_Salons" />
+        <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}

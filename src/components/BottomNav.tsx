@@ -38,7 +38,7 @@ export function BottomNav() {
   ];
 
   return (
-    <div className="fixed inset-x-0 bottom-4 z-50 flex justify-center px-4 md:hidden pointer-events-none">
+    <div className="fixed inset-x-0 bottom-[calc(0.75rem+env(safe-area-inset-bottom,0px))] z-50 flex justify-center px-4 md:hidden pointer-events-none">
       <nav
         className="pointer-events-auto relative flex w-full max-w-sm items-center justify-around rounded-full bg-[#16161D]/95 px-3 py-1.5 border border-white/15 shadow-[0_20px_50px_rgba(0,0,0,0.85)] backdrop-blur-2xl"
         aria-label="Mobile Bottom Navigation"

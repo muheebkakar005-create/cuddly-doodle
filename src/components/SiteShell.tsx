@@ -13,7 +13,7 @@ export function SiteShell({ children }: { children: React.ReactNode }) {
       <Suspense fallback={<div className="h-16 bg-[#0C0C0E]" />}>
         <Header />
       </Suspense>
-      <main className="mx-auto min-h-[70vh] w-full max-w-6xl px-4 pb-20 pt-4 md:pb-12">{children}</main>
+      <main className="mx-auto min-h-[70vh] w-full max-w-6xl px-4 pb-[calc(5.5rem+env(safe-area-inset-bottom,0px))] pt-4 md:pb-12">{children}</main>
       <Footer />
       <BottomNav />
     </>

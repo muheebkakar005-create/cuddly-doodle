@@ -11,7 +11,7 @@ async function runAuditTests() {
   let passed = 0;
   let failed = 0;
 
-  function assert(desc: string, condition: boolean, extra?: any) {
+  function assert(desc: string, condition: boolean, extra?: unknown) {
     if (condition) {
       console.log(`  [PASS] ${desc}`);
       passed++;

@@ -1,19 +1,27 @@
-const CACHE_NAME = "qsc-pwa-v1";
+const CACHE_NAME = "qsc-pwa-v2";
 const STATIC_ASSETS = [
   "/",
   "/manifest.json",
+  "/icons/icon-192.png",
+  "/icons/icon-512.png",
   "/icons/icon.svg",
+  "/apple-touch-icon.png",
   "/explore",
   "/bookings"
 ];
 
-// Install event: cache shell assets
+// Install event: cache shell assets safely
 self.addEventListener("install", (event) => {
   event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => {
-      return cache.addAll(STATIC_ASSETS).catch((err) => {
-        console.warn("PWA pre-cache warning:", err);
-      });
+    caches.open(CACHE_NAME).then(async (cache) => {
+      // Use individual caching to prevent one 404 from failing the entire install
+      for (const asset of STATIC_ASSETS) {
+        try {
+          await cache.add(asset);
+        } catch (err) {
+          console.warn("PWA pre-cache item warning:", asset, err);
+        }
+      }
     })
   );
   self.skipWaiting();
@@ -37,7 +45,6 @@ self.addEventListener("activate", (event) => {
 
 // Fetch event: network first, fallback to cache for offline resilience
 self.addEventListener("fetch", (event) => {
-  // Only handle GET requests and http/https
   if (event.request.method !== "GET" || !event.request.url.startsWith("http")) {
     return;
   }
@@ -50,12 +57,14 @@ self.addEventListener("fetch", (event) => {
   event.respondWith(
     fetch(event.request)
       .then((networkResponse) => {
-        // Cache successful responses for static assets
+        // Cache successful GET responses for static assets and images
         if (
           networkResponse &&
           networkResponse.status === 200 &&
           (event.request.url.includes("/_next/static/") ||
            event.request.url.includes("/icons/") ||
+           event.request.url.endsWith(".png") ||
+           event.request.url.endsWith(".svg") ||
            event.request.url.endsWith(".css") ||
            event.request.url.endsWith(".woff2"))
         ) {
@@ -75,7 +84,11 @@ self.addEventListener("fetch", (event) => {
           if (event.request.mode === "navigate") {
             return caches.match("/");
           }
-          return new Response("Offline", { status: 503, statusText: "Service Unavailable" });
+          return new Response("Offline – Quetta Salon Connect", {
+            status: 503,
+            statusText: "Service Unavailable",
+            headers: { "Content-Type": "text/plain" }
+          });
         });
       })
   );

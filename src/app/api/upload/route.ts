@@ -11,9 +11,9 @@ export async function POST(req: NextRequest) {
     const file = formData.get("file") as File | null;
     const folder = (formData.get("folder") as string) || "quetta-salon-connect";
 
-    // Allow logged in staff/admin or registration photo upload
+    // Allow logged-in staff/admin or registration photo upload
     const isRegistration = folder === "registration";
-    if (!isRegistration && (!session || (session.role !== "SUPER_ADMIN" && session.role !== "SALON_OWNER"))) {
+    if (!isRegistration && (!session || (session.role !== "admin" && session.role !== "owner"))) {
       return NextResponse.json({ error: "Unauthorized. Please log in as shop owner or admin." }, { status: 401 });
     }
 
