@@ -7,10 +7,11 @@ export default function robots(): MetadataRoute.Robots {
     rules: [
       {
         userAgent: "*",
-        allow: "/",
-        disallow: ["/api/", "/admin/", "/owner/", "/super-admin/", "/shop-owner/"],
+        allow: ["/", "/explore", "/salons/", "/quetta/", "/bookings", "/owner/register", "/login"],
+        disallow: ["/api/", "/admin/", "/owner/dashboard", "/owner/bookings", "/owner/profile", "/super-admin/", "/shop-owner/", "/_next/"],
       },
     ],
     sitemap: `${siteUrl}/sitemap.xml`,
+    host: siteUrl,
   };
 }

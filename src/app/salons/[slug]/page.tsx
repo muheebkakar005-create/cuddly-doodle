@@ -10,6 +10,8 @@ import { BookingEngine } from "./BookingEngine";
 
 export const dynamic = "force-dynamic";
 
+const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || "https://qsalons.vercel.app";
+
 export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
   try {
@@ -18,13 +20,27 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
       select: { name: true, quettaArea: true, category: true, imageUrl: true },
     });
     if (!salon) return { title: "Salon Not Found" };
+
+    const categoryLabel =
+      salon.category === "GENTS"
+        ? "Gents Barber"
+        : salon.category === "LADIES"
+        ? "Ladies Beauty Parlour"
+        : "Unisex Spa";
+
     return {
-      title: `${salon.name} – ${salon.quettaArea}, Quetta`,
-      description: `Book appointments at ${salon.name} in ${salon.quettaArea}, Quetta. Compare PKR pricing, browse staff, and confirm on WhatsApp.`,
+      title: `${salon.name} – ${categoryLabel} in ${salon.quettaArea}, Quetta | Q_Salons`,
+      description: `Book an appointment at ${salon.name}, a ${categoryLabel} in ${salon.quettaArea}, Quetta. View real PKR pricing, services, opening hours, and book directly via WhatsApp.`,
+      alternates: {
+        canonical: `${SITE_URL}/salons/${slug}`,
+      },
       openGraph: {
-        title: `${salon.name} | Q_Salons Quetta`,
-        description: `Book at ${salon.name} in ${salon.quettaArea}, Quetta.`,
+        title: `${salon.name} | ${salon.quettaArea}, Quetta – Q_Salons`,
+        description: `${categoryLabel} in ${salon.quettaArea}, Quetta. Book via WhatsApp on Q_Salons.`,
+        url: `${SITE_URL}/salons/${slug}`,
         images: [salon.imageUrl || "/logo-web.png"],
+        type: "website",
+        siteName: "Q_Salons",
       },
     };
   } catch {
@@ -69,9 +85,78 @@ export default async function SalonPage({ params }: { params: Promise<{ slug: st
     breakEnd: salon.breakEnd,
   });
 
+  // Schema.org LocalBusiness JSON-LD — type varies by category
+  const schemaType =
+    salon.category === "GENTS"
+      ? "HairSalon"
+      : salon.category === "LADIES"
+      ? "BeautySalon"
+      : "DaySpa";
+
+  const localBusinessJsonLd = {
+    "@context": "https://schema.org",
+    "@type": schemaType,
+    name: salon.name,
+    url: `${SITE_URL}/salons/${slug}`,
+    image: salon.imageUrl || `${SITE_URL}/logo-web.png`,
+    description: `${salon.name} is a verified ${CATEGORY_LABELS[salon.category]} in ${salon.quettaArea}, Quetta, Pakistan. Browse services, prices, and book via WhatsApp.`,
+    address: {
+      "@type": "PostalAddress",
+      streetAddress: salon.address || salon.quettaArea,
+      addressLocality: "Quetta",
+      addressRegion: "Balochistan",
+      addressCountry: "PK",
+    },
+    geo: {
+      "@type": "GeoCoordinates",
+      // Quetta city center coordinates as fallback (not individual salon GPS)
+      latitude: "30.1798",
+      longitude: "66.9750",
+    },
+    openingHours:
+      salon.openTime && salon.closeTime
+        ? `Mo-Su ${salon.openTime}-${salon.closeTime}`
+        : undefined,
+    aggregateRating:
+      salon.reviewCount > 0
+        ? {
+            "@type": "AggregateRating",
+            ratingValue: salon.rating.toFixed(1),
+            reviewCount: salon.reviewCount,
+            bestRating: "5",
+            worstRating: "1",
+          }
+        : undefined,
+    priceRange: "PKR",
+    servesCuisine: undefined,
+    hasMap: salon.mapsUrl || undefined,
+    telephone: undefined, // not exposing phone numbers publicly
+    sameAs: [],
+  };
+
+  const breadcrumbJsonLd = {
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    itemListElement: [
+      { "@type": "ListItem", position: 1, name: "Home", item: SITE_URL },
+      { "@type": "ListItem", position: 2, name: "Explore", item: `${SITE_URL}/explore` },
+      { "@type": "ListItem", position: 3, name: salon.name, item: `${SITE_URL}/salons/${slug}` },
+    ],
+  };
+
   return (
     <div className="space-y-4 max-w-3xl mx-auto pb-24 px-1">
-      {/* Top Header - Exactly matches Screen 2 in reference UI */}
+      {/* Structured Data */}
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(localBusinessJsonLd) }}
+      />
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbJsonLd) }}
+      />
+
+      {/* Top Header */}
       <div className="flex items-center justify-between py-1">
         <Link
           href="/explore"
@@ -86,19 +171,18 @@ export default async function SalonPage({ params }: { params: Promise<{ slug: st
         <div className="w-9" />
       </div>
 
-      {/* Salon Mini Profile Card - Compact & Clean */}
+      {/* Salon Mini Profile Card */}
       <section className="rounded-2xl border border-white/10 bg-[#16161D] p-3.5 sm:p-4 shadow-lg space-y-3">
-        {/* Single primary photo with subtle gallery previews */}
         <div className="relative h-40 sm:h-52 w-full overflow-hidden rounded-xl border border-white/10">
           <Image
             src={images[0]}
-            alt={salon.name}
+            alt={`${salon.name} – ${CATEGORY_LABELS[salon.category]} in ${salon.quettaArea}, Quetta`}
             fill
             priority
             className="object-cover"
           />
           <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-black/20" />
-          
+
           <div className="absolute top-2.5 left-2.5 flex items-center gap-1.5">
             <span className="rounded-full bg-black/60 backdrop-blur-md border border-white/20 px-2.5 py-0.5 text-[10px] font-bold text-gold">
               {salon.quettaArea}
@@ -155,10 +239,10 @@ export default async function SalonPage({ params }: { params: Promise<{ slug: st
         </div>
       </section>
 
-      {/* Dynamic Booking Engine (Calendar, Slots, Specialists, Compact Action Bar) */}
+      {/* Dynamic Booking Engine */}
       <BookingEngine salon={salon} />
 
-      {/* Customer Reviews - Compact */}
+      {/* Customer Reviews */}
       <section className="rounded-2xl border border-white/10 bg-[#16161D] p-4 shadow-lg space-y-3">
         <h3 className="text-sm font-bold text-white">Verified Customer Reviews</h3>
         <ul className="space-y-2">
@@ -185,6 +269,31 @@ export default async function SalonPage({ params }: { params: Promise<{ slug: st
           )}
         </ul>
       </section>
+
+      {/* SEO cross-links */}
+      <nav aria-label="Related pages" className="flex flex-wrap gap-2 pt-1">
+        <Link
+          href="/quetta/salons"
+          className="text-xs text-white/50 hover:text-white transition-colors"
+        >
+          ← All Quetta Salons
+        </Link>
+        {salon.category === "GENTS" && (
+          <Link href="/quetta/barbers" className="text-xs text-white/50 hover:text-white transition-colors">
+            Barbers in Quetta
+          </Link>
+        )}
+        {salon.category === "LADIES" && (
+          <Link href="/quetta/beauty-parlours" className="text-xs text-white/50 hover:text-white transition-colors">
+            Beauty Parlours in Quetta
+          </Link>
+        )}
+        {salon.category === "UNISEX" && (
+          <Link href="/quetta/spas" className="text-xs text-white/50 hover:text-white transition-colors">
+            Spas in Quetta
+          </Link>
+        )}
+      </nav>
     </div>
   );
 }

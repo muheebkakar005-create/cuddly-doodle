@@ -2,6 +2,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { AREAS } from "@/lib/constants";
 import { Prisma } from "@prisma/client";
+import { Metadata } from "next";
 import { prisma, withRetry } from "@/lib/prisma";
 import { sortByRank } from "@/lib/rank";
 
@@ -10,6 +11,14 @@ import { SalonCard } from "@/components/SalonCard";
 import { StarIcon } from "@/components/Icons";
 
 export const dynamic = "force-dynamic";
+
+const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://qsalons.vercel.app";
+
+export const metadata: Metadata = {
+  alternates: {
+    canonical: siteUrl,
+  },
+};
 
 const CATEGORY_TILES = [
   {
@@ -111,7 +120,7 @@ export default async function HomePage() {
 
           <div className="p-3.5 sm:p-6 space-y-1.5">
             <h1 className="text-base sm:text-2xl font-bold leading-tight text-white">
-              Refresh your style
+              Find Salons &amp; Barbers in Quetta
             </h1>
             <div>
               <span className="inline-block rounded-full bg-white/15 border border-white/25 px-2.5 py-0.5 text-[11px] font-bold tracking-wide text-white backdrop-blur-md">
@@ -119,7 +128,7 @@ export default async function HomePage() {
               </span>
             </div>
             <p className="text-[9px] text-white/50 tracking-wider font-semibold">
-              *T&C applied • Quetta, Balochistan
+              *T&amp;C applied • Quetta, Balochistan
             </p>
           </div>
         </div>

@@ -77,9 +77,9 @@ export const metadata: Metadata = {
     description: "Book verified salons across Quetta, Balochistan.",
     images: ["/logo-web.png"],
   },
-  alternates: {
-    canonical: siteUrl,
-  },
+  // NOTE: Do NOT set alternates.canonical here in the root layout.
+  // Each individual page sets its own self-referencing canonical URL.
+  // Setting it here would incorrectly canonicalize every page to the homepage.
 };
 
 export const viewport: Viewport = {
@@ -92,17 +92,36 @@ export const viewport: Viewport = {
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
-  const jsonLd = {
+  const websiteJsonLd = {
     "@context": "https://schema.org",
     "@type": "WebSite",
     name: "Q_Salons",
+    alternateName: "Quetta Salon Connect",
     url: siteUrl,
-    description: "Quetta's Premier Salon and Beauty Parlour Booking Platform",
+    description: "Quetta's Premier Salon Discovery and Booking Platform",
+    inLanguage: "en-PK",
     potentialAction: {
       "@type": "SearchAction",
-      target: `${siteUrl}/explore?q={search_term_string}`,
+      target: { "@type": "EntryPoint", urlTemplate: `${siteUrl}/explore?q={search_term_string}` },
       "query-input": "required name=search_term_string",
     },
+  };
+
+  const orgJsonLd = {
+    "@context": "https://schema.org",
+    "@type": "Organization",
+    name: "Q_Salons",
+    alternateName: "Quetta Salon Connect",
+    url: siteUrl,
+    logo: `${siteUrl}/logo-web.png`,
+    description: "Q_Salons connects customers with verified salons, barbers, and beauty parlours across Quetta, Balochistan, Pakistan.",
+    areaServed: {
+      "@type": "City",
+      name: "Quetta",
+      containedInPlace: { "@type": "AdministrativeArea", name: "Balochistan, Pakistan" },
+    },
+    founder: { "@type": "Person", name: "Muheeb Ullah Kakar" },
+    sameAs: [],
   };
 
   return (
@@ -113,10 +132,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
         <meta name="apple-mobile-web-app-title" content="Q_Salons" />
         <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
-        <script
-          type="application/ld+json"
-          dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
-        />
+        <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(websiteJsonLd) }} />
+        <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(orgJsonLd) }} />
       </head>
       <body
         className={`${dm.variable} ${display.variable} antialiased bg-[#0C0C0E] text-white min-h-screen selection:bg-[#E5C378]/30 selection:text-white`}

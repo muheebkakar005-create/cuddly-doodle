@@ -1,4 +1,5 @@
 import { Suspense } from "react";
+import { Metadata } from "next";
 import { Prisma } from "@prisma/client";
 import { prisma, withRetry } from "@/lib/prisma";
 import { sortByRank } from "@/lib/rank";
@@ -8,9 +9,17 @@ export const dynamic = "force-dynamic";
 
 type SalonWithServices = Prisma.SalonGetPayload<{ include: { services: true } }>;
 
-export const metadata = {
-  title: "Explore Salons & Parlours in Quetta",
-  description: "Browse and filter the best gents salons, ladies beauty parlours, and luxury spas in Quetta, Balochistan.",
+export const metadata: Metadata = {
+  title: "Explore Salons, Barbers & Beauty Parlours in Quetta",
+  description: "Find and book the best salons, barbers, and beauty parlours in Quetta. Filter by area (Jinnah Road, Model Town, Satellite Town), category, price, and rating.",
+  alternates: {
+    canonical: `${process.env.NEXT_PUBLIC_SITE_URL || "https://qsalons.vercel.app"}/explore`,
+  },
+  openGraph: {
+    title: "Explore Quetta Salons & Beauty Parlours | Q_Salons",
+    description: "Filter 18+ verified salons, barbers & beauty parlours in Quetta by area, price & rating.",
+    url: `${process.env.NEXT_PUBLIC_SITE_URL || "https://qsalons.vercel.app"}/explore`,
+  },
 };
 
 export default async function ExplorePage() {
