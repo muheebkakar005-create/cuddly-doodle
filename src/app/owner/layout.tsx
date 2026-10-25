@@ -2,12 +2,13 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { CalendarIcon, HomeIcon, ScissorsIcon } from "@/components/Icons";
+import { CalendarIcon, HomeIcon, ScissorsIcon, WalletIcon } from "@/components/Icons";
 
 const links = [
   { href: "/owner", label: "Dashboard", icon: HomeIcon },
   { href: "/owner/profile", label: "Shop Profile & Hours", icon: ScissorsIcon },
   { href: "/owner/bookings", label: "Bookings", icon: CalendarIcon },
+  { href: "/owner/payments", label: "Payment & Settlements", icon: WalletIcon },
 ];
 
 export default function OwnerLayout({ children }: { children: React.ReactNode }) {

@@ -2,13 +2,14 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { CalendarIcon, HomeIcon, ScissorsIcon, ShieldLockIcon } from "@/components/Icons";
+import { CalendarIcon, HomeIcon, ScissorsIcon, ShieldLockIcon, WalletIcon } from "@/components/Icons";
 
 const links = [
   { href: "/admin", label: "Dashboard", icon: HomeIcon },
   { href: "/admin/salons", label: "Salons", icon: ScissorsIcon },
   { href: "/admin/appointments", label: "Bookings", icon: CalendarIcon },
   { href: "/admin/approvals", label: "Approvals", icon: ShieldLockIcon },
+  { href: "/admin/payouts", label: "Payouts & Accounts", icon: WalletIcon },
 ];
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {

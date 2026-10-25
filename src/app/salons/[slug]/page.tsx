@@ -59,6 +59,7 @@ export default async function SalonPage({ params }: { params: Promise<{ slug: st
           services: true,
           staff: true,
           reviews: { orderBy: { createdAt: "desc" }, take: 12 },
+          paymentAccount: true,
         },
       })
     );

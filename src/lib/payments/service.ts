@@ -19,7 +19,9 @@ export class PaymentService {
       prisma.appointment.findUnique({
         where: { id: appointmentId },
         include: {
-          salon: true,
+          salon: {
+            include: { paymentAccount: true },
+          },
           services: { include: { service: true } },
         },
       })
@@ -27,6 +29,16 @@ export class PaymentService {
 
     if (!appointment) {
       throw new Error("Appointment not found");
+    }
+
+    // Mandatory Rule: Salon must have an approved, verified payment account
+    if (
+      !appointment.salon.paymentAccount ||
+      appointment.salon.paymentAccount.verificationStatus !== "VERIFIED"
+    ) {
+      throw new Error(
+        "Online advance payment is unavailable for this salon because its payment account has not yet been verified. Please try another salon or contact support."
+      );
     }
 
     if (appointment.paymentStatus === "PAID" || appointment.status === "CONFIRMED") {

@@ -121,11 +121,22 @@ export async function POST(req: Request) {
     const salon = await withRetry(() =>
       prisma.salon.findUnique({
         where: { id: salonId },
-        include: { services: true, appointments: true },
+        include: { services: true, appointments: true, paymentAccount: true },
       })
     );
     if (!salon || salon.approvalStatus !== "APPROVED") {
       return NextResponse.json({ error: "Salon not found or inactive" }, { status: 404 });
+    }
+
+    // Mandatory Rule: Salon must have an approved, verified payment account to accept online advance bookings
+    if (!salon.paymentAccount || salon.paymentAccount.verificationStatus !== "VERIFIED") {
+      return NextResponse.json(
+        {
+          error:
+            "Online advance payment is unavailable for this salon because its payment account has not yet been verified. Please try another salon or contact support.",
+        },
+        { status: 422 }
+      );
     }
 
     const selected = salon.services.filter((s) => serviceIds.includes(s.id));
