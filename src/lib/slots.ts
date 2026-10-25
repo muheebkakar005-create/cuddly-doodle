@@ -62,17 +62,34 @@ export function generateSlots(params: {
   return slots;
 }
 
-export function nextSevenDays(): { date: string; label: string; weekday: string }[] {
-  const days: { date: string; label: string; weekday: string }[] = [];
+export function nextSevenDays(): {
+  date: string;
+  label: string;
+  weekday: string;
+  dayName: string;
+  dayNum: number;
+  monthName: string;
+}[] {
+  const days: {
+    date: string;
+    label: string;
+    weekday: string;
+    dayName: string;
+    dayNum: number;
+    monthName: string;
+  }[] = [];
   const weekdays = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
   const today = karachiDateISO();
   const [y, m, d] = today.split("-").map(Number);
   for (let i = 0; i < 8; i++) {
     const dt = new Date(y, m - 1, d + i);
     const date = `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, "0")}-${String(dt.getDate()).padStart(2, "0")}`;
+    const weekday = weekdays[dt.getDay()];
+    const dayNum = dt.getDate();
+    const monthName = dt.toLocaleString("en-PK", { month: "short" });
     const label =
-      i === 0 ? "Today" : i === 1 ? "Tomorrow" : `${dt.getDate()} ${dt.toLocaleString("en-PK", { month: "short" })}`;
-    days.push({ date, label, weekday: weekdays[dt.getDay()] });
+      i === 0 ? "Today" : i === 1 ? "Tomorrow" : `${dayNum} ${monthName}`;
+    days.push({ date, label, weekday, dayName: weekday, dayNum, monthName });
   }
   return days;
 }

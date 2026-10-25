@@ -16,11 +16,18 @@ type Row = {
   appointmentDate: string;
   appointmentTime: string;
   totalPricePkr: number;
+  advanceAmountPkr?: number;
+  paidAmountPkr?: number;
+  remainingAmountPkr?: number;
+  paymentStatus?: string;
+  paymentProvider?: string;
+  paymentRef?: string;
   status: string;
   specialNotes?: string;
   salon: { name: string; slug: string; quettaArea: string; whatsappNumber: string; imageUrl?: string };
   services: { service: { name: string } }[];
   review: { id: string } | null;
+  payments?: { id: string; paymentMethod: string; amountPaidPkr: number; status: string }[];
 };
 
 export default function BookingsPage() {
@@ -78,13 +85,13 @@ export default function BookingsPage() {
       case "CANCELLED":
         return <span className="rounded-full bg-rose-500/20 text-rose-400 border border-rose-500/30 px-2.5 py-0.5 text-[10px] font-bold">Cancelled</span>;
       default:
-        return <span className="rounded-full bg-amber-500/20 text-amber-400 border border-amber-500/30 px-2.5 py-0.5 text-[10px] font-bold">Pending</span>;
+        return <span className="rounded-full bg-amber-500/20 text-amber-400 border border-amber-500/30 px-2.5 py-0.5 text-[10px] font-bold">Pending Payment</span>;
     }
   }
 
   return (
     <div className="mx-auto max-w-xl space-y-6 pb-20">
-      {/* Header with back button matching Screen 3 in uploaded UI */}
+      {/* Header with back button */}
       <div className="flex items-center justify-between">
         <Link
           href="/"
@@ -94,12 +101,12 @@ export default function BookingsPage() {
           <ChevronLeftIcon className="h-5 w-5" />
         </Link>
         <h1 className="text-sm sm:text-base font-bold text-white text-center">
-          My Appointments
+          My Appointments & Payments
         </h1>
         <div className="w-9" />
       </div>
 
-      {/* Summary Card matching uploaded Screen 3 "My Wallet" design */}
+      {/* Summary Card */}
       <section className="rounded-2xl border border-white/10 bg-[#16161D] text-white p-4 shadow-lg text-center space-y-2">
         <p className="text-[10px] uppercase tracking-wider text-white/50 font-semibold">
           Total Appointment Value
@@ -156,17 +163,21 @@ export default function BookingsPage() {
         {error && <p className="text-xs font-semibold text-rose-400">{error}</p>}
       </div>
 
-      {/* Appointments List matching uploaded Screen 3 "Transactions" list */}
+      {/* Appointments List */}
       <section className="space-y-3">
         <div className="flex items-center justify-between">
-          <h2 className="font-display text-lg font-bold text-white">Transactions</h2>
+          <h2 className="font-display text-lg font-bold text-white">Appointments</h2>
           <span className="text-xs text-white/50 font-medium">
             {rows.length} record{rows.length === 1 ? "" : "s"}
           </span>
         </div>
 
-        <div className="space-y-2.5">
+        <div className="space-y-3">
           {rows.map((r) => {
+            const isPaid = r.paymentStatus === "PAID" || r.status === "CONFIRMED";
+            const advanceAmount = r.advanceAmountPkr || Math.round(r.totalPricePkr / 2);
+            const remainingAmount = r.remainingAmountPkr != null ? r.remainingAmountPkr : (r.totalPricePkr - advanceAmount);
+
             const message = buildBookingMessage({
               salonName: r.salon.name,
               customerName: r.customerName,
@@ -176,6 +187,11 @@ export default function BookingsPage() {
               total: r.totalPricePkr,
               date: r.appointmentDate,
               time: formatTime12(r.appointmentTime),
+              advancePaid: isPaid ? (r.paidAmountPkr || advanceAmount) : 0,
+              remainingDue: isPaid ? remainingAmount : r.totalPricePkr,
+              paymentProvider: r.paymentProvider,
+              paymentRef: r.paymentRef,
+              paymentStatus: r.paymentStatus,
             });
 
             const salonImg =
@@ -214,19 +230,62 @@ export default function BookingsPage() {
                   </div>
                 </div>
 
-                <div className="flex items-center justify-between pt-2.5 border-t border-white/10 text-xs">
+                {/* 50% Advance Online Payment Breakdown Card */}
+                <div className="rounded-2xl bg-[#1C1C24] border border-white/5 p-3 text-xs space-y-1.5">
+                  <div className="flex justify-between items-center">
+                    <span className="text-white/60">50% Advance Payment:</span>
+                    {isPaid ? (
+                      <span className="font-bold text-emerald-400 flex items-center gap-1">
+                        <span>✓ Paid {formatPkr(r.paidAmountPkr || advanceAmount)}</span>
+                        <span className="text-[10px] text-white/40">({r.paymentProvider || "Online"})</span>
+                      </span>
+                    ) : (
+                      <span className="font-bold text-amber-400">
+                        {formatPkr(advanceAmount)} (Unpaid)
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="flex justify-between items-center pt-1 border-t border-white/5">
+                    <span className="text-white/60">Payable at Salon:</span>
+                    <span className="font-bold text-gold">
+                      {formatPkr(remainingAmount)}
+                    </span>
+                  </div>
+
+                  {!isPaid && r.status !== "CANCELLED" && (
+                    <div className="pt-2">
+                      <Link
+                        href={`/bookings/confirmed?id=${r.id}`}
+                        className="block w-full text-center rounded-xl bg-gold py-2 text-xs font-bold text-black shadow-sm hover:bg-gold-light transition-all"
+                      >
+                        ⚡ Complete 50% Advance ({formatPkr(advanceAmount)})
+                      </Link>
+                    </div>
+                  )}
+                </div>
+
+                <div className="flex items-center justify-between pt-1 border-t border-white/10 text-xs">
                   <span className="text-[11px] text-white/60 font-medium">
                     Time: {formatTime12(r.appointmentTime)}
                   </span>
-                  <a
-                    href={whatsappChatUrl(r.salon.whatsappNumber, message)}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="inline-flex items-center gap-1.5 rounded-xl bg-[#25D366] px-3.5 py-1.5 text-[11px] font-bold text-white shadow-md hover:bg-[#1eb957] transition-colors"
-                  >
-                    <WhatsAppIcon className="h-3.5 w-3.5" />
-                    <span>WhatsApp</span>
-                  </a>
+                  <div className="flex items-center gap-2">
+                    <Link
+                      href={`/bookings/confirmed?id=${r.id}`}
+                      className="inline-flex items-center rounded-xl bg-white/10 px-3 py-1.5 text-[11px] font-bold text-white hover:bg-white/20 transition-colors"
+                    >
+                      Receipt
+                    </Link>
+                    <a
+                      href={whatsappChatUrl(r.salon.whatsappNumber, message)}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="inline-flex items-center gap-1.5 rounded-xl bg-[#25D366] px-3.5 py-1.5 text-[11px] font-bold text-white shadow-md hover:bg-[#1eb957] transition-colors"
+                    >
+                      <WhatsAppIcon className="h-3.5 w-3.5" />
+                      <span>WhatsApp</span>
+                    </a>
+                  </div>
                 </div>
 
                 {r.status === "COMPLETED" && !r.review && (

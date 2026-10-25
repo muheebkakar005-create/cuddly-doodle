@@ -13,6 +13,12 @@ type Row = {
   appointmentDate: string;
   appointmentTime: string;
   totalPricePkr: number;
+  advanceAmountPkr?: number;
+  paidAmountPkr?: number;
+  remainingAmountPkr?: number;
+  paymentStatus?: string;
+  paymentProvider?: string;
+  paymentRef?: string;
   status: string;
   specialNotes: string;
   salon: { name: string; quettaArea: string };
@@ -83,7 +89,7 @@ export default function AdminAppointmentsPage() {
         <div>
           <h1 className="text-xl sm:text-2xl font-bold text-white">Appointment Master Board</h1>
           <p className="text-xs text-white/50 mt-0.5">
-            Monitor, approve, complete, or cancel incoming bookings from all Quetta salons.
+            Monitor, track 50% advance payments, and oversee bookings across all Quetta salons.
           </p>
         </div>
         <span className="rounded-xl bg-white/10 px-3 py-1.5 text-xs font-bold text-gold">
@@ -171,29 +177,30 @@ export default function AdminAppointmentsPage() {
 
       {/* Appointments Data Table */}
       <div className="overflow-x-auto rounded-2xl border border-white/10 bg-[#16161D] shadow-lg">
-        <table className="w-full min-w-[760px] text-left text-xs">
+        <table className="w-full min-w-[850px] text-left text-xs">
           <thead className="border-b border-white/10 bg-[#1C1C24] text-white/50 uppercase tracking-wider text-[10px]">
             <tr>
-              <th className="px-4 py-3">Schedule & Total</th>
+              <th className="px-4 py-3">Schedule</th>
               <th className="px-4 py-3">Customer & Phone</th>
               <th className="px-4 py-3">Salon & Area</th>
-              <th className="px-4 py-3">Services</th>
+              <th className="px-4 py-3">Financials (50% Advance)</th>
               <th className="px-4 py-3">Status Toggle</th>
               <th className="px-4 py-3 text-right">One-Click WhatsApp</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-white/5">
             {rows.map((r) => {
-              const waMessage = `Salam ${r.customerName}! ✂️ This is Super Admin regarding your booking at ${r.salon.name} for ${r.appointmentDate} at ${formatTime12(r.appointmentTime)}. Current status: ${r.status}. Total: Rs. ${r.totalPricePkr.toLocaleString()} PKR.`;
+              const isPaid = r.paymentStatus === "PAID" || r.status === "CONFIRMED";
+              const advance = r.paidAmountPkr || r.advanceAmountPkr || Math.round(r.totalPricePkr / 2);
+              const balance = r.remainingAmountPkr != null ? r.remainingAmountPkr : (r.totalPricePkr - advance);
+
+              const waMessage = `Salam ${r.customerName}! ✂️ This is Super Admin regarding your booking at ${r.salon.name} for ${r.appointmentDate} at ${formatTime12(r.appointmentTime)}. Status: ${r.status}. Total: ${formatPkr(r.totalPricePkr)}. Advance Paid: ${isPaid ? formatPkr(advance) : "Pending"}. Counter Due: ${formatPkr(balance)}.`;
 
               return (
                 <tr key={r.id} className="hover:bg-white/5 transition-colors">
                   <td className="px-4 py-3">
                     <span className="font-bold text-white block">{r.appointmentDate}</span>
                     <span className="text-white/50 block text-[11px]">{formatTime12(r.appointmentTime)}</span>
-                    <span className="font-bold text-gold block mt-0.5">
-                      {formatPkr(r.totalPricePkr)}
-                    </span>
                   </td>
 
                   <td className="px-4 py-3">
@@ -214,12 +221,29 @@ export default function AdminAppointmentsPage() {
                   </td>
 
                   <td className="px-4 py-3">
-                    <div className="space-y-0.5 max-w-[220px]">
-                      {r.services.map((s, idx) => (
-                        <span key={idx} className="block text-white/90 font-medium text-xs">
-                          • {s.service.name}
+                    <div className="space-y-0.5">
+                      <div className="flex items-center gap-1.5">
+                        <span className="font-bold text-white">Total: {formatPkr(r.totalPricePkr)}</span>
+                      </div>
+                      <div className="text-[11px]">
+                        {isPaid ? (
+                          <span className="text-emerald-400 font-semibold block">
+                            ✓ 50% Adv: {formatPkr(advance)} ({r.paymentProvider || "Online"})
+                          </span>
+                        ) : (
+                          <span className="text-amber-400 font-semibold block">
+                            ⏳ 50% Adv: {formatPkr(advance)} (Pending)
+                          </span>
+                        )}
+                        <span className="text-gold font-medium block">
+                          Counter Due: {formatPkr(balance)}
                         </span>
-                      ))}
+                        {r.paymentRef && (
+                          <span className="text-[9px] text-white/40 block font-mono">
+                            Ref: {r.paymentRef}
+                          </span>
+                        )}
+                      </div>
                     </div>
                   </td>
 

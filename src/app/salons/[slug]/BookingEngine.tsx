@@ -1,14 +1,13 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
 import Image from "next/image";
 import { formatDuration, formatPkr, formatTime12 } from "@/lib/format";
 import { isValidPakistaniPhone, normalizePakistaniPhone } from "@/lib/phone";
 import { nextSevenDays } from "@/lib/slots";
-import { buildBookingMessage, whatsappChatUrl } from "@/lib/whatsapp";
-import { CheckIcon, ChevronLeftIcon, ChevronRightIcon, WhatsAppIcon } from "@/components/Icons";
-import { saveOfflineBooking } from "@/lib/offlineSync";
+import { CheckIcon } from "@/components/Icons";
+import { calculateAdvancePayment } from "@/lib/payments/calculation";
+import { PaymentProvider } from "@/lib/payments/types";
 
 type Service = { id: string; name: string; durationMinutes: number; pricePkr: number; category: string };
 type Staff = { id: string; name: string; specialty: string; photoUrl?: string };
@@ -38,7 +37,6 @@ export function BookingEngine({
     staff: Staff[];
   };
 }) {
-  const router = useRouter();
   const days = nextSevenDays();
   const [selected, setSelected] = useState<string[]>([]);
   const [staffName, setStaffName] = useState("Any Available");
@@ -49,12 +47,17 @@ export function BookingEngine({
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
   const [notes, setNotes] = useState("");
+  const [provider, setProvider] = useState<PaymentProvider>("JAZZCASH");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
   const picked = salon.services.filter((s) => selected.includes(s.id));
   const total = picked.reduce((a, s) => a + s.pricePkr, 0);
   const duration = picked.reduce((a, s) => a + s.durationMinutes, 0) || 45;
+
+  // 50% Advance Online Payment Calculation
+  const { advanceAmountPkr, remainingAmountPkr } =
+    total > 0 ? calculateAdvancePayment(total) : { advanceAmountPkr: 0, remainingAmountPkr: 0 };
 
   const grouped = useMemo(() => {
     const map = new Map<string, Service[]>();
@@ -82,55 +85,19 @@ export function BookingEngine({
     setSelected((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
   }
 
-  async function confirm(openWhatsApp: boolean) {
+  async function handleProceedToPayment() {
     setError("");
     if (!picked.length) return setError("Please select at least one service.");
     if (!time) return setError("Please choose an available appointment time slot.");
     if (!name.trim()) return setError("Please enter your full name.");
     if (!isValidPakistaniPhone(phone)) {
-      return setError("Please enter a valid Pakistani WhatsApp number (e.g. 0300-1234567).");
+      return setError("Please enter a valid Pakistani mobile number (e.g. 0300-1234567).");
     }
 
     setLoading(true);
 
-    // If device is offline, store in pending offline queue immediately
-    if (typeof window !== "undefined" && !navigator.onLine) {
-      const offline = saveOfflineBooking({
-        salonId: salon.id,
-        salonName: salon.name,
-        salonWhatsApp: salon.whatsappNumber,
-        customerName: name.trim(),
-        customerPhone: phone,
-        appointmentDate: date,
-        appointmentTime: time,
-        serviceIds: selected,
-        serviceNames: picked.map((s) => s.name),
-        totalPricePkr: total,
-        staffName,
-        specialNotes: notes,
-      });
-
-      const message = buildBookingMessage({
-        salonName: salon.name,
-        customerName: name.trim(),
-        phone: normalizePakistaniPhone(phone) || phone,
-        area: salon.quettaArea,
-        services: picked.map((s) => s.name),
-        total,
-        date,
-        time: formatTime12(time),
-      });
-
-      if (openWhatsApp) {
-        window.open(whatsappChatUrl(salon.whatsappNumber, message), "_blank");
-      }
-
-      setLoading(false);
-      router.push(`/bookings/confirmed?id=${offline.tempId}&offline=true`);
-      return;
-    }
-
     try {
+      // 1. Create appointment in PENDING status (with 15 min reservation)
       const res = await fetch("/api/appointments", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -145,123 +112,123 @@ export function BookingEngine({
           staffName,
         }),
       });
+
       const data = await res.json();
-      setLoading(false);
       if (!res.ok) {
-        setError(data.error || "Could not confirm appointment. Please try again.");
+        setLoading(false);
+        setError(data.error || "Could not reserve appointment slot. Please try another slot.");
         return;
       }
 
+      const appointmentId = data.appointment.id;
+
+      // Save appointment reference in customer local storage
       try {
         const ids: string[] = JSON.parse(localStorage.getItem("qsc_bookings") || "[]");
-        ids.unshift(data.appointment.id);
-        localStorage.setItem("qsc_bookings", JSON.stringify(ids.slice(0, 20)));
+        if (!ids.includes(appointmentId)) {
+          ids.unshift(appointmentId);
+          localStorage.setItem("qsc_bookings", JSON.stringify(ids.slice(0, 20)));
+        }
         localStorage.setItem("qsc_phone", normalizePakistaniPhone(phone) || phone);
-      } catch {
-        // ignore
-      }
+      } catch {}
 
-      const message = buildBookingMessage({
-        salonName: salon.name,
-        customerName: name.trim(),
-        phone: normalizePakistaniPhone(phone) || phone,
-        area: salon.quettaArea,
-        services: picked.map((s) => s.name),
-        total,
-        date,
-        time: formatTime12(time),
+      // 2. Initiate 50% Online Advance Payment via selected Provider
+      const payRes = await fetch("/api/payments/initiate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          appointmentId,
+          provider,
+        }),
       });
 
-      if (openWhatsApp) {
-        window.open(whatsappChatUrl(salon.whatsappNumber, message), "_blank");
+      const payData = await payRes.json();
+      if (!payRes.ok) {
+        setLoading(false);
+        setError(payData.error || "Failed to initialize payment gateway. Please retry.");
+        return;
       }
-      router.push(`/bookings/confirmed?id=${data.appointment.id}`);
-    } catch {
-      // Network failure: queue offline automatically
-      const offline = saveOfflineBooking({
-        salonId: salon.id,
-        salonName: salon.name,
-        salonWhatsApp: salon.whatsappNumber,
-        customerName: name.trim(),
-        customerPhone: phone,
-        appointmentDate: date,
-        appointmentTime: time,
-        serviceIds: selected,
-        serviceNames: picked.map((s) => s.name),
-        totalPricePkr: total,
-        staffName,
-        specialNotes: notes,
-      });
 
+      // 3. Provider Checkout Redirection
+      if (payData.checkoutType === "REDIRECT_POST" && payData.formFields) {
+        // Dynamically create and submit HTML form to gateway URL
+        const form = document.createElement("form");
+        form.method = "POST";
+        form.action = payData.checkoutUrl;
+        Object.entries(payData.formFields as Record<string, string>).forEach(([k, v]) => {
+          const input = document.createElement("input");
+          input.type = "hidden";
+          input.name = k;
+          input.value = v;
+          form.appendChild(input);
+        });
+        document.body.appendChild(form);
+        form.submit();
+      } else if (payData.checkoutUrl) {
+        // Redirect to sandbox simulator or GET checkout URL
+        window.location.href = payData.checkoutUrl;
+      } else {
+        setLoading(false);
+        setError("Invalid gateway response. Please try again.");
+      }
+    } catch (err: unknown) {
       setLoading(false);
-      router.push(`/bookings/confirmed?id=${offline.tempId}&offline=true`);
+      const msg = err instanceof Error ? err.message : "Network error. Please try again.";
+      setError(msg);
     }
   }
 
-  const currentMonthYear = new Date(date).toLocaleDateString("en-US", {
-    month: "short",
-    year: "numeric",
-  });
-
   return (
-    <div className="space-y-3.5 pb-20">
-      {/* Step 1: Services Selection Matrix */}
-      <section className="rounded-2xl border border-white/10 bg-[#16161D] text-white p-3.5 sm:p-4 shadow-lg">
-        <div className="flex items-center justify-between gap-2 pb-2.5 border-b border-white/10">
-          <div>
-            <h2 className="text-sm sm:text-base font-bold text-white">1. Select Services</h2>
-            <p className="text-[11px] text-white/50">Rates in Pakistani Rupee (PKR)</p>
+    <div className="space-y-4 pb-32">
+      {/* Step 1: Select Services */}
+      <section className="rounded-2xl border border-white/10 bg-[#16161D] text-white p-3.5 sm:p-4 shadow-lg space-y-3">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <span className="flex h-6 w-6 items-center justify-center rounded-full bg-white text-black font-bold text-xs">
+              1
+            </span>
+            <h3 className="text-xs sm:text-sm font-bold text-white">Select Services</h3>
           </div>
           {picked.length > 0 && (
-            <div className="rounded-xl bg-[#1C1C24] border border-white/10 px-2.5 py-1 text-right">
-              <span className="block text-[10px] font-semibold text-gold">
-                {picked.length} selected · ~{duration}m
-              </span>
-              <span className="block text-xs font-bold text-white">
-                {formatPkr(total)}
-              </span>
-            </div>
+            <span className="rounded-full bg-gold/15 border border-gold/30 px-2.5 py-0.5 text-[10px] font-bold text-gold">
+              {picked.length} selected ({formatPkr(total)})
+            </span>
           )}
         </div>
 
-        <div className="mt-3 space-y-3.5">
+        <div className="space-y-3">
           {grouped.map(([cat, list]) => (
-            <div key={cat} className="space-y-2">
-              <span className="text-[10px] font-bold uppercase tracking-wider text-gold/90">
-                {cat}
-              </span>
-
-              <div className="grid gap-1.5 sm:grid-cols-2">
+            <div key={cat} className="space-y-1.5">
+              <p className="text-[10px] font-bold uppercase tracking-wider text-white/50">{cat}</p>
+              <div className="grid gap-1.5">
                 {list.map((s) => {
                   const on = selected.includes(s.id);
                   return (
-                    <label
+                    <button
+                      type="button"
                       key={s.id}
                       onClick={() => toggle(s.id)}
-                      className={`flex cursor-pointer items-center justify-between rounded-xl border p-2.5 transition-all ${
+                      className={`flex items-center justify-between rounded-xl p-2.5 sm:p-3 text-left transition-all border cursor-pointer ${
                         on
-                          ? "border-white bg-white/15 shadow-sm ring-1 ring-white/30"
-                          : "border-white/10 bg-[#1C1C24] hover:bg-[#22222C]"
+                          ? "border-gold/50 bg-gold/10 text-white shadow-sm"
+                          : "border-white/5 bg-[#1C1C24] text-white/80 hover:bg-[#22222C]"
                       }`}
                     >
-                      <div className="flex items-center gap-2.5 min-w-0">
+                      <div className="min-w-0 pr-2">
+                        <p className="text-xs font-semibold text-white leading-tight truncate">{s.name}</p>
+                        <p className="text-[10px] text-white/50 mt-0.5">{formatDuration(s.durationMinutes)}</p>
+                      </div>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <span className="text-xs font-bold text-gold">{formatPkr(s.pricePkr)}</span>
                         <div
-                          className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border transition-colors ${
-                            on ? "border-white bg-white text-black" : "border-white/30 bg-transparent"
+                          className={`flex h-4 w-4 items-center justify-center rounded border transition-colors ${
+                            on ? "border-gold bg-gold text-black" : "border-white/20"
                           }`}
                         >
-                          {on && <CheckIcon className="h-3 w-3" />}
-                        </div>
-                        <div className="min-w-0">
-                          <p className="text-xs font-semibold text-white leading-tight truncate">{s.name}</p>
-                          <p className="text-[10px] text-white/50">{formatDuration(s.durationMinutes)}</p>
+                          {on && <CheckIcon className="h-3 w-3 stroke-[3]" />}
                         </div>
                       </div>
-
-                      <span className="text-xs font-bold text-white ml-2 shrink-0">
-                        {formatPkr(s.pricePkr)}
-                      </span>
-                    </label>
+                    </button>
                   );
                 })}
               </div>
@@ -270,94 +237,72 @@ export function BookingEngine({
         </div>
       </section>
 
-      {/* Step 2: Calendar Card (matches Screen 2 in reference UI) */}
-      <section className="rounded-2xl border border-white/10 bg-[#16161D] text-white p-3.5 sm:p-4 shadow-lg">
-        <div className="flex items-center justify-between pb-2 border-b border-white/10">
-          <button
-            type="button"
-            className="flex h-7 w-7 items-center justify-center rounded-lg bg-white/10 text-white hover:bg-white/20 transition-colors"
-          >
-            <ChevronLeftIcon className="h-3.5 w-3.5" />
-          </button>
-          <h3 className="text-xs sm:text-sm font-bold text-white tracking-wide">
-            {currentMonthYear}
-          </h3>
-          <button
-            type="button"
-            className="flex h-7 w-7 items-center justify-center rounded-lg bg-white/10 text-white hover:bg-white/20 transition-colors"
-          >
-            <ChevronRightIcon className="h-3.5 w-3.5" />
-          </button>
+      {/* Step 2: Pick Date */}
+      <section className="rounded-2xl border border-white/10 bg-[#16161D] text-white p-3.5 sm:p-4 shadow-lg space-y-3">
+        <div className="flex items-center gap-2">
+          <span className="flex h-6 w-6 items-center justify-center rounded-full bg-white text-black font-bold text-xs">
+            2
+          </span>
+          <h3 className="text-xs sm:text-sm font-bold text-white">Choose Date</h3>
         </div>
 
-        {/* Days of week row */}
-        <div className="mt-2.5 grid grid-cols-7 text-center text-[10px] font-semibold text-white/50">
-          {["M", "T", "W", "T", "F", "S", "S"].map((d, i) => (
-            <span key={i}>{d}</span>
-          ))}
-        </div>
-
-        {/* Date Selector Row */}
-        <div className="mt-2 grid grid-cols-7 gap-1 text-center">
+        <div className="flex gap-2 overflow-x-auto pb-1 no-scrollbar">
           {days.map((d) => {
-            const isSelected = date === d.date;
-            const dayNum = d.date.split("-")[2];
-
+            const isPicked = date === d.date;
             return (
               <button
                 type="button"
                 key={d.date}
                 onClick={() => setDate(d.date)}
-                className="flex flex-col items-center justify-center py-1 transition-all cursor-pointer"
+                className={`shrink-0 flex flex-col items-center justify-center rounded-xl p-2 w-16 border transition-all cursor-pointer ${
+                  isPicked
+                    ? "border-white bg-white text-black font-bold shadow-md"
+                    : "border-white/10 bg-[#1C1C24] text-white/70 hover:bg-[#22222C]"
+                }`}
               >
-                <span
-                  className={`flex h-8 w-8 items-center justify-center rounded-full text-xs font-bold transition-all ${
-                    isSelected
-                      ? "bg-white text-black shadow-md scale-105"
-                      : "text-white/80 hover:bg-white/10"
-                  }`}
-                >
-                  {dayNum}
-                </span>
+                <span className="text-[9px] uppercase tracking-wider">{d.dayName}</span>
+                <span className="text-sm font-bold mt-0.5">{d.dayNum}</span>
+                <span className="text-[9px] opacity-75">{d.monthName}</span>
               </button>
             );
           })}
         </div>
       </section>
 
-      {/* Step 3: Available Slot Grid */}
-      <section className="rounded-2xl border border-white/10 bg-[#16161D] text-white p-3.5 sm:p-4 shadow-lg">
-        <div className="flex items-center justify-between mb-2.5">
-          <h3 className="text-xs sm:text-sm font-bold text-white">Available Slot</h3>
-          <span className="text-[10px] text-white/50">
-            {slots.filter((s) => s.available).length} slots open
-          </span>
+      {/* Step 3: Pick Available Time Slot */}
+      <section className="rounded-2xl border border-white/10 bg-[#16161D] text-white p-3.5 sm:p-4 shadow-lg space-y-3">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <span className="flex h-6 w-6 items-center justify-center rounded-full bg-white text-black font-bold text-xs">
+              3
+            </span>
+            <h3 className="text-xs sm:text-sm font-bold text-white">Available Time Slot</h3>
+          </div>
+          <span className="text-[10px] text-white/50">{formatDuration(duration)} estimated</span>
         </div>
 
         {slotsLoading ? (
-          <div className="py-4 text-center text-xs text-white/50">
-            Checking slots…
-          </div>
+          <p className="text-xs text-white/50 py-3 text-center">Checking real-time slot availability…</p>
         ) : slots.length === 0 ? (
-          <div className="rounded-xl bg-white/5 p-3 text-center text-xs text-white/60">
-            No open slots on this date.
-          </div>
+          <p className="text-xs text-amber-300 py-3 text-center">
+            No slots available for this date. The salon may be closed or fully booked.
+          </p>
         ) : (
-          <div className="grid grid-cols-3 gap-1.5 sm:grid-cols-4 md:grid-cols-6">
+          <div className="grid grid-cols-3 sm:grid-cols-4 gap-1.5 max-h-48 overflow-y-auto no-scrollbar pr-1">
             {slots.map((s) => {
-              const isChosen = time === s.time;
+              const on = time === s.time;
               return (
                 <button
                   type="button"
                   key={s.time}
                   disabled={!s.available}
                   onClick={() => setTime(s.time)}
-                  className={`rounded-full py-1.5 px-2 text-center text-[11px] font-semibold transition-all cursor-pointer ${
-                    !s.available
-                      ? "cursor-not-allowed bg-white/5 text-white/20 line-through"
-                      : isChosen
-                      ? "bg-white text-black shadow-md scale-105"
-                      : "bg-[#22222A] text-white/90 hover:bg-[#2C2C36] border border-white/10"
+                  className={`rounded-xl py-2 px-1 text-center text-xs font-semibold transition-all border cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed ${
+                    on
+                      ? "border-gold bg-gold text-black font-bold shadow-md"
+                      : s.available
+                      ? "border-white/10 bg-[#1C1C24] text-white hover:bg-white/10"
+                      : "border-transparent bg-[#16161D] text-white/30"
                   }`}
                 >
                   {s.label}
@@ -368,15 +313,17 @@ export function BookingEngine({
         )}
       </section>
 
-      {/* Step 4: Select Specialist Carousel */}
-      {salon.staff && salon.staff.length > 0 && (
-        <section className="rounded-2xl border border-white/10 bg-[#16161D] text-white p-3.5 sm:p-4 shadow-lg">
-          <h3 className="text-xs sm:text-sm font-bold text-white mb-2.5">
-            Select Specialist
-          </h3>
+      {/* Step 4: Staff Specialist */}
+      {salon.staff.length > 0 && (
+        <section className="rounded-2xl border border-white/10 bg-[#16161D] text-white p-3.5 sm:p-4 shadow-lg space-y-3">
+          <div className="flex items-center gap-2">
+            <span className="flex h-6 w-6 items-center justify-center rounded-full bg-white text-black font-bold text-xs">
+              4
+            </span>
+            <h3 className="text-xs sm:text-sm font-bold text-white">Select Specialist (Optional)</h3>
+          </div>
 
-          <div className="flex gap-2 overflow-x-auto pb-1.5 no-scrollbar">
-            {/* Any Available option */}
+          <div className="flex gap-2 overflow-x-auto pb-1 no-scrollbar">
             <button
               type="button"
               onClick={() => setStaffName("Any Available")}
@@ -430,18 +377,20 @@ export function BookingEngine({
         </section>
       )}
 
-      {/* Step 5: Customer Details Form */}
+      {/* Step 5: Customer Details */}
       <section className="rounded-2xl border border-white/10 bg-[#16161D] text-white p-3.5 sm:p-4 shadow-lg space-y-3">
-        <div>
-          <h3 className="text-xs sm:text-sm font-bold text-white">Your Information</h3>
-          <p className="text-[10px] text-white/50">
-            Booking confirmation will be delivered to your WhatsApp.
-          </p>
+        <div className="flex items-center gap-2">
+          <span className="flex h-6 w-6 items-center justify-center rounded-full bg-white text-black font-bold text-xs">
+            5
+          </span>
+          <h3 className="text-xs sm:text-sm font-bold text-white">Your Contact Details</h3>
         </div>
 
         <div className="space-y-2.5">
           <div>
-            <label className="block text-[10px] font-bold uppercase tracking-wider text-white/70 mb-1">Full Name *</label>
+            <label className="block text-[10px] font-bold uppercase tracking-wider text-white/70 mb-1">
+              Full Name *
+            </label>
             <input
               value={name}
               onChange={(e) => setName(e.target.value)}
@@ -452,7 +401,7 @@ export function BookingEngine({
 
           <div>
             <label className="block text-[10px] font-bold uppercase tracking-wider text-white/70 mb-1">
-              WhatsApp Number *
+              Mobile / WhatsApp Number *
             </label>
             <input
               value={phone}
@@ -470,51 +419,120 @@ export function BookingEngine({
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
               rows={2}
-              placeholder="e.g., urgent slot, extra hot towel…"
+              placeholder="e.g., urgent cut, specific hair color shade…"
               className="w-full rounded-xl border border-white/10 bg-[#1C1C24] p-2.5 text-xs text-white placeholder:text-white/40 outline-none focus:border-white focus:ring-1 focus:ring-white"
             />
           </div>
-
-          {error && (
-            <div className="rounded-xl bg-rose-500/20 border border-rose-500/40 p-2.5 text-xs font-medium text-rose-300">
-              {error}
-            </div>
-          )}
         </div>
       </section>
 
-      {/* Compact Bottom Action Bar - Anchored to bottom without blocking screen */}
-      <div className="fixed inset-x-0 bottom-0 z-50 bg-[#121217]/95 border-t border-white/10 px-4 py-2.5 backdrop-blur-xl shadow-2xl">
+      {/* Step 6: 50% Online Advance Payment Method Selection */}
+      <section className="rounded-2xl border border-gold/30 bg-gradient-to-br from-[#1c1c24] to-[#121217] text-white p-4 shadow-xl space-y-4">
+        <div className="flex items-center justify-between pb-2 border-b border-white/10">
+          <div className="flex items-center gap-2">
+            <span className="flex h-6 w-6 items-center justify-center rounded-full bg-gold text-black font-bold text-xs">
+              6
+            </span>
+            <h3 className="text-xs sm:text-sm font-bold text-white">
+              Mandatory 50% Advance Online Payment
+            </h3>
+          </div>
+          <span className="text-[10px] font-bold text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/20">
+            Secure Gateway
+          </span>
+        </div>
+
+        {/* Clear Pricing Breakdown Required by Policy */}
+        <div className="rounded-xl bg-black/40 border border-white/10 p-3.5 space-y-2">
+          <div className="flex items-center justify-between text-xs text-white/80">
+            <span>Total Service Price:</span>
+            <span className="font-bold text-white">{formatPkr(total)}</span>
+          </div>
+          <div className="flex items-center justify-between text-xs text-gold font-bold pt-1 border-t border-white/10">
+            <span>50% Advance Required Now:</span>
+            <span className="text-sm font-black">{formatPkr(advanceAmountPkr)}</span>
+          </div>
+          <div className="flex items-center justify-between text-[11px] text-white/60">
+            <span>Remaining 50% Payable at Salon:</span>
+            <span>{formatPkr(remainingAmountPkr)}</span>
+          </div>
+        </div>
+
+        <p className="text-[10px] text-white/60 leading-relaxed">
+          Select your online payment method. You will be redirected to complete the 50% advance payment to reserve your time slot.
+        </p>
+
+        {/* Provider Radio Options */}
+        <div className="grid grid-cols-2 gap-2.5">
+          <button
+            type="button"
+            onClick={() => setProvider("JAZZCASH")}
+            className={`flex flex-col items-center justify-center rounded-xl p-3 border transition-all cursor-pointer ${
+              provider === "JAZZCASH"
+                ? "border-red-500 bg-red-950/40 ring-1 ring-red-400 text-white"
+                : "border-white/10 bg-[#16161D] text-white/70 hover:bg-[#202028]"
+            }`}
+          >
+            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-red-600 text-white font-black text-xs shadow-md mb-1">
+              JC
+            </div>
+            <span className="text-xs font-bold text-white">JazzCash</span>
+            <span className="text-[9px] text-white/50">Mobile / Debit Card</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setProvider("EASYPAISA")}
+            className={`flex flex-col items-center justify-center rounded-xl p-3 border transition-all cursor-pointer ${
+              provider === "EASYPAISA"
+                ? "border-emerald-500 bg-emerald-950/40 ring-1 ring-emerald-400 text-white"
+                : "border-white/10 bg-[#16161D] text-white/70 hover:bg-[#202028]"
+            }`}
+          >
+            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-emerald-600 text-white font-black text-xs shadow-md mb-1">
+              EP
+            </div>
+            <span className="text-xs font-bold text-white">Easypaisa</span>
+            <span className="text-[9px] text-white/50">Mobile / App / QR</span>
+          </button>
+        </div>
+
+        {error && (
+          <div className="rounded-xl bg-rose-500/20 border border-rose-500/40 p-2.5 text-xs font-medium text-rose-300">
+            {error}
+          </div>
+        )}
+      </section>
+
+      {/* Floating Bottom Sticky Bar */}
+      <div className="fixed inset-x-0 bottom-0 z-50 bg-[#121217]/95 border-t border-white/10 px-4 py-3 backdrop-blur-xl shadow-2xl">
         <div className="max-w-3xl mx-auto flex items-center justify-between gap-3">
           <div className="min-w-0">
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-bold text-gold">
+                Advance: {formatPkr(advanceAmountPkr)}
+              </span>
+              <span className="text-[10px] text-white/50">
+                (Total: {formatPkr(total)})
+              </span>
+            </div>
             <span className="block text-[10px] text-white/60 truncate">
-              {picked.length} serv · {time ? formatTime12(time) : "pick slot"}
-            </span>
-            <span className="block text-sm sm:text-base font-bold text-gold">
-              {formatPkr(total)}
+              Bal: {formatPkr(remainingAmountPkr)} at salon · {time ? formatTime12(time) : "pick time"}
             </span>
           </div>
 
-          <div className="flex items-center gap-2 shrink-0">
-            <button
-              type="button"
-              disabled={loading}
-              onClick={() => confirm(false)}
-              className="rounded-full bg-white px-4 py-2 text-xs font-bold text-black shadow-md hover:bg-white/90 transition-all disabled:opacity-60 cursor-pointer"
-            >
-              {loading ? "Confirming…" : "Confirm"}
-            </button>
-
-            <button
-              type="button"
-              disabled={loading}
-              onClick={() => confirm(true)}
-              className="inline-flex items-center gap-1.5 rounded-full bg-[#25D366] px-3.5 py-2 text-xs font-bold text-white shadow-md hover:bg-[#1eb957] transition-all disabled:opacity-60 cursor-pointer"
-            >
-              <WhatsAppIcon className="h-3.5 w-3.5" />
-              <span>WhatsApp</span>
-            </button>
-          </div>
+          <button
+            type="button"
+            disabled={loading || picked.length === 0 || !time}
+            onClick={handleProceedToPayment}
+            className={`rounded-2xl px-5 py-3 text-xs font-bold shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer ${
+              provider === "JAZZCASH"
+                ? "bg-red-600 hover:bg-red-500 text-white shadow-red-600/30"
+                : "bg-emerald-600 hover:bg-emerald-500 text-white shadow-emerald-600/30"
+            }`}
+          >
+            {loading ? "Connecting to Gateway…" : `Pay PKR ${advanceAmountPkr.toLocaleString()} via ${provider === "JAZZCASH" ? "JazzCash" : "Easypaisa"}`}
+          </button>
         </div>
       </div>
     </div>

@@ -7,23 +7,45 @@ import { formatPkr, formatTime12 } from "@/lib/format";
 import { buildBookingMessage, whatsappChatUrl } from "@/lib/whatsapp";
 import { CheckIcon, WhatsAppIcon } from "@/components/Icons";
 
+type AppointmentData = {
+  id: string;
+  customerName: string;
+  customerPhone: string;
+  appointmentDate: string;
+  appointmentTime: string;
+  totalPricePkr: number;
+  advanceAmountPkr?: number;
+  paidAmountPkr?: number;
+  remainingAmountPkr?: number;
+  paymentStatus: string;
+  paymentProvider?: string;
+  paymentRef?: string;
+  status: string;
+  specialNotes?: string;
+  salon: { name: string; quettaArea: string; address: string; whatsappNumber: string; slug: string };
+  services: { service: { name: string; pricePkr: number } }[];
+  payments?: {
+    id: string;
+    internalRef: string;
+    providerRef?: string;
+    paymentMethod: string;
+    amountPaidPkr: number;
+    status: string;
+    paidAt?: string;
+  }[];
+};
+
 function Inner() {
   const params = useSearchParams();
   const id = params.get("id");
-  const [row, setRow] = useState<{
-    id: string;
-    customerName: string;
-    customerPhone: string;
-    appointmentDate: string;
-    appointmentTime: string;
-    totalPricePkr: number;
-    specialNotes?: string;
-    salon: { name: string; quettaArea: string; address: string; whatsappNumber: string; slug: string };
-    services: { service: { name: string; pricePkr: number } }[];
-  } | null>(null);
+  const paymentQuery = params.get("payment");
+  const [row, setRow] = useState<AppointmentData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [retryMethod, setRetryMethod] = useState<"JAZZCASH" | "EASYPAISA">("JAZZCASH");
+  const [retrying, setRetrying] = useState(false);
+  const [retryError, setRetryError] = useState("");
 
-  useEffect(() => {
+  const loadAppointment = () => {
     if (!id) {
       setLoading(false);
       return;
@@ -34,13 +56,19 @@ function Inner() {
         const queue = JSON.parse(localStorage.getItem("qsc_offline_bookings_queue") || "[]");
         const found = queue.find((x: { tempId: string }) => x.tempId === id);
         if (found) {
+          const total = found.totalPricePkr || 0;
           setRow({
             id: found.tempId,
             customerName: found.customerName,
             customerPhone: found.customerPhone,
             appointmentDate: found.appointmentDate,
             appointmentTime: found.appointmentTime,
-            totalPricePkr: found.totalPricePkr,
+            totalPricePkr: total,
+            advanceAmountPkr: Math.round(total / 2),
+            paidAmountPkr: 0,
+            remainingAmountPkr: total - Math.round(total / 2),
+            paymentStatus: "PENDING",
+            status: "PENDING",
             specialNotes: found.specialNotes,
             salon: {
               name: found.salonName,
@@ -62,8 +90,40 @@ function Inner() {
     fetch(`/api/appointments/${id}`)
       .then((r) => r.json())
       .then((d) => setRow(d.appointment || null))
+      .catch(() => setRow(null))
       .finally(() => setLoading(false));
+  };
+
+  useEffect(() => {
+    loadAppointment();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
+
+  async function handleRetryPayment() {
+    if (!row) return;
+    setRetrying(true);
+    setRetryError("");
+    try {
+      const res = await fetch("/api/payments/initiate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          appointmentId: row.id,
+          paymentMethod: retryMethod,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.checkoutUrl) {
+        setRetryError(data.error || "Unable to initiate payment gateway session.");
+        setRetrying(false);
+        return;
+      }
+      window.location.href = data.checkoutUrl;
+    } catch {
+      setRetryError("Connection error while connecting to payment gateway.");
+      setRetrying(false);
+    }
+  }
 
   if (loading) {
     return (
@@ -94,6 +154,13 @@ function Inner() {
     );
   }
 
+  const isPaid = row.paymentStatus === "PAID" || row.status === "CONFIRMED";
+  const advanceAmount = row.advanceAmountPkr || Math.round(row.totalPricePkr / 2);
+  const remainingAmount = row.remainingAmountPkr != null ? row.remainingAmountPkr : (row.totalPricePkr - advanceAmount);
+  const latestPayment = row.payments && row.payments.length > 0 ? row.payments[0] : null;
+  const paymentProviderName = row.paymentProvider || (latestPayment ? latestPayment.paymentMethod : "JazzCash / Easypaisa");
+  const refCode = row.paymentRef || (latestPayment ? (latestPayment.providerRef || latestPayment.internalRef) : row.id.slice(0, 8));
+
   const message = buildBookingMessage({
     salonName: row.salon.name,
     customerName: row.customerName,
@@ -103,21 +170,110 @@ function Inner() {
     total: row.totalPricePkr,
     date: row.appointmentDate,
     time: formatTime12(row.appointmentTime),
+    advancePaid: isPaid ? (row.paidAmountPkr || advanceAmount) : 0,
+    remainingDue: isPaid ? remainingAmount : row.totalPricePkr,
+    paymentProvider: paymentProviderName,
+    paymentRef: refCode,
+    paymentStatus: row.paymentStatus,
   });
 
   return (
     <div className="mx-auto max-w-lg space-y-6 pb-16">
       <div className="rounded-3xl border border-white/10 bg-[#16161D] p-6 sm:p-8 shadow-2xl text-center text-white">
-        <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
-          <CheckIcon className="h-8 w-8" />
+        {/* Status Icon */}
+        <div className={`mx-auto flex h-16 w-16 items-center justify-center rounded-full border ${
+          isPaid
+            ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/30"
+            : "bg-amber-500/20 text-amber-400 border-amber-500/30"
+        }`}>
+          {isPaid ? (
+            <CheckIcon className="h-8 w-8" />
+          ) : (
+            <span className="text-2xl font-bold font-mono">⏳</span>
+          )}
         </div>
 
         <h1 className="mt-4 font-display text-2xl sm:text-3xl font-bold text-white">
-          Appointment Requested!
+          {isPaid ? "Appointment Confirmed!" : "Advance Payment Required"}
         </h1>
         <p className="mt-1 text-xs text-white/60">
           Booking ID: <span className="font-mono text-gold font-bold">{row.id.slice(0, 8)}</span>
+          {isPaid && refCode && (
+            <span className="ml-2 pl-2 border-l border-white/20">
+              Txn Ref: <span className="font-mono text-emerald-400 font-bold">{refCode}</span>
+            </span>
+          )}
         </p>
+
+        {/* Failed Banner if returned from canceled/failed payment */}
+        {(paymentQuery === "failed" || (!isPaid && row.paymentStatus === "FAILED")) && (
+          <div className="mt-4 rounded-2xl bg-rose-500/10 border border-rose-500/30 p-3.5 text-left text-xs text-rose-300">
+            <p className="font-bold">Payment Was Not Completed</p>
+            <p className="mt-0.5 text-white/80 text-[11px]">
+              Your 50% advance online transaction could not be verified. You can retry paying the 50% advance below to lock in your appointment slot.
+            </p>
+          </div>
+        )}
+
+        {/* Advance Notice Banner for Pending Payment */}
+        {!isPaid && (
+          <div className="mt-4 rounded-2xl bg-amber-500/10 border border-amber-500/30 p-4 text-left text-xs text-amber-200 space-y-3">
+            <div>
+              <p className="font-bold flex items-center gap-1.5 text-amber-300 text-sm">
+                <span>⚠️</span> 50% Advance Policy
+              </p>
+              <p className="mt-1 text-[11px] text-white/80 leading-relaxed">
+                To guarantee your salon slot at {row.salon.name}, QSalon requires a <strong>50% advance online payment ({formatPkr(advanceAmount)})</strong> via JazzCash or Easypaisa. The remaining 50% ({formatPkr(remainingAmount)}) is payable at the salon counter.
+              </p>
+            </div>
+
+            {/* Provider Switcher */}
+            <div className="pt-2 border-t border-amber-500/20">
+              <label className="block text-[10px] uppercase font-bold text-amber-300 mb-1.5">
+                Choose Payment Method:
+              </label>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => setRetryMethod("JAZZCASH")}
+                  className={`rounded-xl border p-2.5 text-center transition-all cursor-pointer ${
+                    retryMethod === "JAZZCASH"
+                      ? "border-red-500 bg-red-950/40 text-white font-bold ring-1 ring-red-500"
+                      : "border-white/10 bg-[#1C1C24] text-white/70 hover:bg-white/5"
+                  }`}
+                >
+                  <p className="text-xs">🔴 JazzCash</p>
+                  <p className="text-[10px] text-white/50">App / Wallet / Card</p>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setRetryMethod("EASYPAISA")}
+                  className={`rounded-xl border p-2.5 text-center transition-all cursor-pointer ${
+                    retryMethod === "EASYPAISA"
+                      ? "border-emerald-500 bg-emerald-950/40 text-white font-bold ring-1 ring-emerald-500"
+                      : "border-white/10 bg-[#1C1C24] text-white/70 hover:bg-white/5"
+                  }`}
+                >
+                  <p className="text-xs">🟢 Easypaisa</p>
+                  <p className="text-[10px] text-white/50">App / Mobile Account</p>
+                </button>
+              </div>
+            </div>
+
+            {retryError && (
+              <p className="text-xs text-rose-400 font-semibold">{retryError}</p>
+            )}
+
+            <button
+              type="button"
+              disabled={retrying}
+              onClick={handleRetryPayment}
+              className="w-full rounded-2xl bg-gold py-3 text-xs font-bold text-black shadow-lg hover:bg-gold-light transition-all cursor-pointer disabled:opacity-50"
+            >
+              {retrying ? "Connecting to Gateway…" : `Pay 50% Advance Online (${formatPkr(advanceAmount)})`}
+            </button>
+          </div>
+        )}
 
         {/* Receipt Box */}
         <div className="mt-6 rounded-2xl bg-[#1C1C24] border border-white/10 p-4 text-left text-sm space-y-2.5">
@@ -150,9 +306,39 @@ function Inner() {
               ))}
             </ul>
           </div>
-          <div className="flex justify-between pt-1 font-display text-base font-bold text-white">
-            <span>Total to Pay at Salon:</span>
-            <span className="text-gold">{formatPkr(row.totalPricePkr)}</span>
+
+          {/* Transparent Payment Breakdown */}
+          <div className="space-y-1.5 pt-1 text-xs">
+            <div className="flex justify-between text-white/80">
+              <span>Total Service Price:</span>
+              <span className="font-bold text-white">{formatPkr(row.totalPricePkr)}</span>
+            </div>
+
+            <div className="flex justify-between items-center text-emerald-400">
+              <span className="flex items-center gap-1">
+                <span>50% Advance Paid Online:</span>
+                {isPaid && (
+                  <span className="rounded bg-emerald-500/20 px-1 py-0.5 text-[9px] font-bold border border-emerald-500/40">
+                    VERIFIED
+                  </span>
+                )}
+              </span>
+              <span className="font-bold">
+                {isPaid ? `-${formatPkr(row.paidAmountPkr || advanceAmount)}` : "Pending"}
+              </span>
+            </div>
+
+            <div className="flex justify-between items-center pt-2 border-t border-white/10 font-display text-sm font-bold">
+              <span className="text-gold">Remaining Payable at Salon:</span>
+              <span className="text-gold text-base">
+                {isPaid ? formatPkr(remainingAmount) : formatPkr(row.totalPricePkr)}
+              </span>
+            </div>
+            {isPaid && (
+              <p className="text-[10px] text-white/50 text-right pt-0.5">
+                Paid via {paymentProviderName} • Ref: {refCode}
+              </p>
+            )}
           </div>
         </div>
 
@@ -176,7 +362,7 @@ function Inner() {
             className="flex items-center justify-center gap-2 w-full rounded-2xl bg-[#25D366] py-3.5 text-sm font-bold text-white shadow-lg hover:bg-[#1eb957] transition-all cursor-pointer"
           >
             <WhatsAppIcon className="h-5 w-5" />
-            <span>Send WhatsApp Confirmation Now</span>
+            <span>Send WhatsApp Receipt to Salon</span>
           </a>
 
           <div className="flex gap-2">
@@ -187,7 +373,7 @@ function Inner() {
               View in My Bookings
             </Link>
             <Link
-              href={`/salons/${row.salon.slug}`}
+              href={`/salons/${row.salon.slug || ""}`}
               className="flex-1 rounded-2xl border border-white/10 bg-[#24242D] py-2.5 text-xs font-bold text-gold hover:bg-white/10 transition-colors text-center"
             >
               Back to Salon

@@ -4,8 +4,8 @@ import { prisma, withRetry } from "@/lib/prisma";
 import { getSession } from "@/lib/auth";
 import { normalizePakistaniPhone } from "@/lib/phone";
 import { generateSlots } from "@/lib/slots";
-import { liveEvents } from "@/lib/liveEvents";
 import { getClientIp, rateLimit } from "@/lib/rateLimit";
+import { calculateAdvancePayment } from "@/lib/payments/calculation";
 
 export const dynamic = "force-dynamic";
 
@@ -82,6 +82,7 @@ export async function GET(req: Request) {
           salon: true,
           services: { include: { service: true } },
           review: true,
+          payments: { orderBy: { createdAt: "desc" }, take: 1 },
         },
         orderBy: [{ appointmentDate: "desc" }, { createdAt: "desc" }],
         take: 200,
@@ -136,18 +137,29 @@ export async function POST(req: Request) {
     const durationMinutes = selected.reduce((a, s) => a + s.durationMinutes, 0);
     const totalPricePkr = selected.reduce((a, s) => a + s.pricePkr, 0);
 
-    // Concurrency Lock: Check if slot is already occupied before saving
+    // Calculate 50% advance using integer paisa precision
+    const { advanceAmountPkr, remainingAmountPkr } = calculateAdvancePayment(totalPricePkr);
+
+    // Concurrency Lock: Check if slot is already occupied or under an active 15-minute temporary reservation
+    const now = new Date();
     const conflict = await prisma.appointment.findFirst({
       where: {
         salonId,
         appointmentDate,
         appointmentTime,
-        status: { in: ["PENDING", "CONFIRMED"] },
+        OR: [
+          { status: { in: ["CONFIRMED", "COMPLETED"] } },
+          {
+            status: "PENDING",
+            paymentStatus: "PENDING",
+            expiresAt: { gt: now },
+          },
+        ],
       },
     });
     if (conflict) {
       return NextResponse.json(
-        { error: "That time slot was just booked by another customer. Please select another slot." },
+        { error: "That time slot was just selected by another customer. Please select another slot." },
         { status: 409 }
       );
     }
@@ -177,6 +189,7 @@ export async function POST(req: Request) {
       );
     }
 
+    // Create appointment in PENDING status with 15-minute hold for advance online payment
     const appointment = await withRetry(() =>
       prisma.appointment.create({
         data: {
@@ -187,9 +200,14 @@ export async function POST(req: Request) {
           appointmentTime,
           durationMinutes,
           totalPricePkr,
+          advanceAmountPkr,
+          paidAmountPkr: 0,
+          remainingAmountPkr,
+          paymentStatus: "PENDING",
           status: "PENDING",
           specialNotes,
           staffName,
+          expiresAt: new Date(Date.now() + 15 * 60 * 1000), // 15 mins lock
           services: {
             create: selected.map((s) => ({ serviceId: s.id })),
           },
@@ -201,29 +219,11 @@ export async function POST(req: Request) {
       })
     );
 
-    // Emit live event to connected salon owner dashboard
-    try {
-      liveEvents.emit({
-        appointmentId: appointment.id,
-        salonId: appointment.salonId,
-        customerName: appointment.customerName,
-        customerPhone: appointment.customerPhone,
-        services: appointment.services.map((s) => s.service.name),
-        totalPricePkr: appointment.totalPricePkr,
-        appointmentDate: appointment.appointmentDate,
-        appointmentTime: appointment.appointmentTime,
-        staffName: appointment.staffName,
-        createdAt: appointment.createdAt.toISOString(),
-      });
-    } catch (e) {
-      console.warn("LiveEvent emission error (non-fatal):", e);
-    }
-
     return NextResponse.json({ appointment }, { status: 201 });
   } catch (error) {
     console.error("API /api/appointments POST error:", error);
     return NextResponse.json(
-      { error: "Failed to book appointment. Please try again." },
+      { error: "Failed to initiate appointment booking. Please try again." },
       { status: 500 }
     );
   }

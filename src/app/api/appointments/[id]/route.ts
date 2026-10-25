@@ -16,7 +16,12 @@ export async function GET(
     const appointment = await withRetry(() =>
       prisma.appointment.findUnique({
         where: { id },
-        include: { salon: true, services: { include: { service: true } }, review: true },
+        include: {
+          salon: true,
+          services: { include: { service: true } },
+          review: true,
+          payments: { orderBy: { createdAt: "desc" }, take: 5 },
+        },
       })
     );
     if (!appointment) {
@@ -24,11 +29,9 @@ export async function GET(
     }
 
     // Authorization: only the creating customer (via booking ref) or salon owner/admin can view
-    // For booking confirmation pages we allow public access by ID (the ID itself acts as a token)
-    // But we strip sensitive customer phone from public access unless authenticated
     const isManagedBy = canManageSalon(session, appointment.salonId);
     if (!isManagedBy) {
-      // Return a safe subset — strip phone number for unauthenticated callers
+      // Strip phone number for unauthenticated callers
       const safeAppointment = {
         ...appointment,
         customerPhone: appointment.customerPhone.replace(/(\d{4})\d{4}(\d{3})/, "$1****$2"),
