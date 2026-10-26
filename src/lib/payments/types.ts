@@ -2,6 +2,8 @@ export type PaymentProvider = "JAZZCASH" | "EASYPAISA";
 
 export type PaymentStatus = "PENDING" | "PAID" | "FAILED" | "CANCELLED" | "REFUNDED";
 
+export type PaymentType = "ADVANCE" | "REMAINING" | "FULL";
+
 export interface PaymentInitInput {
   appointmentId: string;
   provider: PaymentProvider;
@@ -13,6 +15,7 @@ export interface PaymentInitInput {
   remainingPkr: number;
   internalRef: string;
   baseUrl: string;
+  paymentType?: PaymentType;
 }
 
 export interface PaymentInitOutput {
@@ -25,6 +28,7 @@ export interface PaymentInitOutput {
   advanceAmountPkr: number;
   totalAmountPkr: number;
   remainingAmountPkr: number;
+  paymentType?: PaymentType;
 }
 
 export interface PaymentVerifyResult {

@@ -235,6 +235,75 @@ function runTests() {
     assert(failedVerify.success === false, "Easypaisa declined response properly handled as failure");
   }
 
+  // Test 9: Configurable Commission Rate (500 bps = 5% vs 1000 bps = 10%)
+  {
+    const advancePkr = 1000;
+
+    // Default 1000 bps (10%)
+    const comm10 = calculatePlatformCommission(advancePkr, 1000);
+    assert(comm10.commissionRateBps === 1000, "Rate is 1000 bps");
+    assert(comm10.commissionPkr === 100, "10% of PKR 1,000 is PKR 100");
+    assert(comm10.salonAllocationPkr === 900, "Salon allocation is PKR 900 (90%)");
+
+    // 500 bps (5%)
+    const comm5 = calculatePlatformCommission(advancePkr, 500);
+    assert(comm5.commissionRateBps === 500, "Rate is 500 bps");
+    assert(comm5.commissionPercentage === 5, "Percentage is 5%");
+    assert(comm5.commissionPkr === 50, "5% of PKR 1,000 is PKR 50");
+    assert(comm5.commissionPaisa === 5000, "5% of 100,000 paisa is 5,000 paisa");
+    assert(comm5.salonAllocationPkr === 950, "Salon allocation is PKR 950 (95%)");
+    assert(comm5.salonAllocationPaisa === 95000, "Salon allocation paisa is 95,000 paisa");
+    assert(
+      comm5.commissionPaisa + comm5.salonAllocationPaisa === 100000,
+      "5% split paisa invariant holds (5,000 + 95,000 === 100,000)"
+    );
+  }
+
+  // Test 10: Subsequent Online Payment (Remaining Balance Settled Online)
+  {
+    // Customer booked PKR 2,000 service:
+    // 1. Advance Step:
+    //    Customer pays 50% advance = PKR 1,000
+    //    Platform commission (10%) = PKR 100
+    //    Salon allocation (90%) = PKR 900
+    //    Remaining balance = PKR 1,000
+    const totalPkr = 2000;
+    const advance = calculateAdvancePayment(totalPkr);
+    const advanceComm = calculatePlatformCommission(advance.advanceAmountPkr, 1000);
+
+    assert(advance.advanceAmountPkr === 1000, "Advance step paid PKR 1,000");
+    assert(advanceComm.commissionPkr === 100, "Advance platform commission is PKR 100");
+    assert(advanceComm.salonAllocationPkr === 900, "Advance salon allocation is PKR 900");
+
+    // 2. Subsequent Payment Step (Paying remaining balance online):
+    //    Customer pays remaining PKR 1,000 online
+    //    Platform commission on remaining balance (10%) = PKR 100
+    //    Salon allocation from remaining balance (90%) = PKR 900
+    const remainingPkr = advance.remainingAmountPkr;
+    const remainingComm = calculatePlatformCommission(remainingPkr, 1000);
+
+    assert(remainingPkr === 1000, "Remaining balance to pay is PKR 1,000");
+    assert(remainingComm.commissionPkr === 100, "Subsequent payment commission is PKR 100");
+    assert(remainingComm.salonAllocationPkr === 900, "Subsequent payment salon allocation is PKR 900");
+    assert(
+      remainingComm.commissionPaisa + remainingComm.salonAllocationPaisa === remainingPkr * 100,
+      "Subsequent payment paisa invariant holds"
+    );
+
+    // 3. Combined Total Lifecycle Check:
+    const totalOnlinePaid = advance.advanceAmountPkr + remainingPkr;
+    const totalPlatformCommission = advanceComm.commissionPkr + remainingComm.commissionPkr;
+    const totalSalonEarnings = advanceComm.salonAllocationPkr + remainingComm.salonAllocationPkr;
+
+    assert(totalOnlinePaid === 2000, "Total paid online is exactly PKR 2,000");
+    assert(totalPlatformCommission === 200, "Total platform commission across both steps is PKR 200 (10% of PKR 2,000)");
+    assert(totalSalonEarnings === 1800, "Total salon earnings across both steps is PKR 1,800 (90% of PKR 2,000)");
+    assert(
+      totalPlatformCommission + totalSalonEarnings === totalPkr,
+      "Combined lifecycle invariant holds: 200 (commission) + 1800 (salon) === 2000 (total price)"
+    );
+  }
+
   console.log("\n=================================================================");
   console.log("   ALL 50% ADVANCE & 10% PLATFORM COMMISSION TESTS PASSED!   ");
   console.log("=================================================================\n");

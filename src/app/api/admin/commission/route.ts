@@ -74,10 +74,16 @@ export async function GET(req: Request) {
           commissionPkr: true,
           salonAllocationPkr: true,
           status: true,
+          settlementStatus: true,
+          paymentType: true,
           provider: true,
           salonId: true,
         },
       })
+    );
+
+    const failedPaymentsCount = await withRetry(() =>
+      prisma.payment.count({ where: { status: "FAILED" } })
     );
 
     const totalCommissionsEarnedPkr = allCommissions
@@ -100,6 +106,22 @@ export async function GET(req: Request) {
       .filter((c) => c.status === "EARNED" && c.provider === "EASYPAISA")
       .reduce((sum, c) => sum + c.commissionPkr, 0);
 
+    const advancePaymentsCommissionPkr = allCommissions
+      .filter((c) => c.status === "EARNED" && c.paymentType === "ADVANCE")
+      .reduce((sum, c) => sum + c.commissionPkr, 0);
+
+    const remainingPaymentsCommissionPkr = allCommissions
+      .filter((c) => c.status === "EARNED" && c.paymentType === "REMAINING")
+      .reduce((sum, c) => sum + c.commissionPkr, 0);
+
+    const pendingSettlementCommissionsPkr = allCommissions
+      .filter((c) => c.status === "EARNED" && c.settlementStatus === "PENDING_SETTLEMENT")
+      .reduce((sum, c) => sum + c.commissionPkr, 0);
+
+    const settledCommissionsPkr = allCommissions
+      .filter((c) => c.status === "EARNED" && (c.settlementStatus === "SETTLED" || c.settlementStatus === "RETAINED"))
+      .reduce((sum, c) => sum + c.commissionPkr, 0);
+
     return NextResponse.json({
       commissions,
       config,
@@ -109,9 +131,14 @@ export async function GET(req: Request) {
         totalSalonAllocationDisbursablePkr,
         jazzCashCommissionsPkr,
         easypaisaCommissionsPkr,
+        advancePaymentsCommissionPkr,
+        remainingPaymentsCommissionPkr,
+        pendingSettlementCommissionsPkr,
+        settledCommissionsPkr,
+        failedPaymentsCount,
         totalTransactionsCount: allCommissions.length,
-        commissionRateBps: 1000,
-        commissionPercentage: 10,
+        commissionRateBps: config?.defaultCommissionRateBps || 1000,
+        commissionPercentage: (config?.defaultCommissionRateBps || 1000) / 100,
       },
     });
   } catch (error) {
@@ -134,12 +161,28 @@ export async function POST(req: Request) {
     const bankName = String(body.bankName || "").trim();
     const branchCode = String(body.branchCode || "").trim();
     const businessName = String(body.businessName || "").trim();
+    const defaultCommissionRateBps = body.defaultCommissionRateBps !== undefined
+      ? parseInt(body.defaultCommissionRateBps, 10)
+      : undefined;
 
     if (!accountHolderName || !accountNumber) {
       return NextResponse.json(
         { error: "Account holder name and account/wallet number are required." },
         { status: 400 }
       );
+    }
+
+    const updateData: Record<string, unknown> = {
+      accountHolderName,
+      provider,
+      accountNumber,
+      bankName: provider === "BANK" ? bankName : null,
+      branchCode: provider === "BANK" ? branchCode : null,
+      businessName,
+      updatedBy: session.email,
+    };
+    if (defaultCommissionRateBps && defaultCommissionRateBps > 0) {
+      updateData.defaultCommissionRateBps = defaultCommissionRateBps;
     }
 
     const updated = await withRetry(() =>
@@ -153,17 +196,10 @@ export async function POST(req: Request) {
           bankName: provider === "BANK" ? bankName : null,
           branchCode: provider === "BANK" ? branchCode : null,
           businessName,
+          defaultCommissionRateBps: defaultCommissionRateBps || 1000,
           updatedBy: session.email,
         },
-        update: {
-          accountHolderName,
-          provider,
-          accountNumber,
-          bankName: provider === "BANK" ? bankName : null,
-          branchCode: provider === "BANK" ? branchCode : null,
-          businessName,
-          updatedBy: session.email,
-        },
+        update: updateData,
       })
     );
 

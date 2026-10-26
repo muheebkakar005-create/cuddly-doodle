@@ -46,6 +46,9 @@ function Inner() {
   const [retrying, setRetrying] = useState(false);
   const [retryError, setRetryError] = useState("");
   const [cancelling, setCancelling] = useState(false);
+  const [remainingMethod, setRemainingMethod] = useState<"JAZZCASH" | "EASYPAISA">("JAZZCASH");
+  const [payingRemaining, setPayingRemaining] = useState(false);
+  const [remainingError, setRemainingError] = useState("");
 
   const loadAppointment = () => {
     if (!id) {
@@ -111,7 +114,8 @@ function Inner() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           appointmentId: row.id,
-          paymentMethod: retryMethod,
+          provider: retryMethod,
+          paymentType: "ADVANCE",
         }),
       });
       const data = await res.json();
@@ -124,6 +128,33 @@ function Inner() {
     } catch {
       setRetryError("Connection error while connecting to payment gateway.");
       setRetrying(false);
+    }
+  }
+
+  async function handlePayRemaining() {
+    if (!row) return;
+    setPayingRemaining(true);
+    setRemainingError("");
+    try {
+      const res = await fetch("/api/payments/initiate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          appointmentId: row.id,
+          provider: remainingMethod,
+          paymentType: "REMAINING",
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.checkoutUrl) {
+        setRemainingError(data.error || "Unable to initiate payment session.");
+        setPayingRemaining(false);
+        return;
+      }
+      window.location.href = data.checkoutUrl;
+    } catch {
+      setRemainingError("Connection error while connecting to payment gateway.");
+      setPayingRemaining(false);
     }
   }
 
@@ -366,9 +397,15 @@ function Inner() {
             </div>
 
             <div className="flex justify-between items-center pt-2 border-t border-white/10 font-display text-sm font-bold">
-              <span className="text-gold">Remaining Payable at Salon:</span>
-              <span className="text-gold text-base">
-                {isPaid ? formatPkr(remainingAmount) : formatPkr(row.totalPricePkr)}
+              <span className="text-gold">
+                {remainingAmount === 0 ? "Remaining Balance Due:" : "Remaining Payable at Salon:"}
+              </span>
+              <span className={`text-base ${remainingAmount === 0 ? "text-emerald-400" : "text-gold"}`}>
+                {remainingAmount === 0
+                  ? "PKR 0 (Fully Paid Online)"
+                  : isPaid
+                    ? formatPkr(remainingAmount)
+                    : formatPkr(row.totalPricePkr)}
               </span>
             </div>
             {isPaid && (
@@ -378,6 +415,77 @@ function Inner() {
             )}
           </div>
         </div>
+
+        {/* Subsequent Payment: Option to Pay Remaining Balance Online */}
+        {isPaid && !isCancelled && remainingAmount > 0 && (
+          <div className="mt-6 rounded-2xl bg-cyan-950/40 border border-cyan-500/30 p-4 text-left text-xs text-cyan-200 space-y-3">
+            <div>
+              <p className="font-bold flex items-center gap-1.5 text-cyan-300 text-sm">
+                <span>💳</span> Pay Remaining Balance Online
+              </p>
+              <p className="mt-1 text-[11px] text-white/80 leading-relaxed">
+                Your 50% advance is confirmed! You can settle the remaining balance of <strong>{formatPkr(remainingAmount)}</strong> now via JazzCash or Easypaisa, or pay in cash at the salon.
+              </p>
+            </div>
+
+            {/* Provider Switcher */}
+            <div className="pt-2 border-t border-cyan-500/20">
+              <label className="block text-[10px] uppercase font-bold text-cyan-300 mb-1.5">
+                Choose Payment Method:
+              </label>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => setRemainingMethod("JAZZCASH")}
+                  className={`rounded-xl border p-2.5 text-center transition-all cursor-pointer ${
+                    remainingMethod === "JAZZCASH"
+                      ? "border-red-500 bg-red-950/40 text-white font-bold ring-1 ring-red-500"
+                      : "border-white/10 bg-[#1C1C24] text-white/70 hover:bg-white/5"
+                  }`}
+                >
+                  <p className="text-xs">🔴 JazzCash</p>
+                  <p className="text-[10px] text-white/50">App / Wallet / Card</p>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setRemainingMethod("EASYPAISA")}
+                  className={`rounded-xl border p-2.5 text-center transition-all cursor-pointer ${
+                    remainingMethod === "EASYPAISA"
+                      ? "border-emerald-500 bg-emerald-950/40 text-white font-bold ring-1 ring-emerald-500"
+                      : "border-white/10 bg-[#1C1C24] text-white/70 hover:bg-white/5"
+                  }`}
+                >
+                  <p className="text-xs">🟢 Easypaisa</p>
+                  <p className="text-[10px] text-white/50">App / Mobile Account</p>
+                </button>
+              </div>
+            </div>
+
+            {remainingError && (
+              <p className="text-xs text-rose-400 font-semibold">{remainingError}</p>
+            )}
+
+            <button
+              type="button"
+              disabled={payingRemaining}
+              onClick={handlePayRemaining}
+              className="w-full rounded-2xl bg-cyan-500 py-3 text-xs font-bold text-black shadow-lg hover:bg-cyan-400 transition-all cursor-pointer disabled:opacity-50"
+            >
+              {payingRemaining ? "Connecting to Gateway…" : `Pay Remaining Balance Online (${formatPkr(remainingAmount)})`}
+            </button>
+          </div>
+        )}
+
+        {isPaid && !isCancelled && remainingAmount === 0 && (
+          <div className="mt-4 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 p-3.5 text-center text-xs text-emerald-300">
+            <p className="font-bold flex items-center justify-center gap-1.5 text-emerald-400">
+              <span>✓</span> Full Appointment Paid Online
+            </p>
+            <p className="mt-0.5 text-white/70 text-[11px]">
+              The entire service total has been verified online. Zero balance is due at the salon counter.
+            </p>
+          </div>
+        )}
 
         {/* WhatsApp Preview Card */}
         <div className="mt-6 rounded-2xl bg-emerald-950/40 border border-emerald-500/30 p-4 text-left">

@@ -7,10 +7,11 @@ import { liveEvents } from "@/lib/liveEvents";
 import { isPaymentSandboxMode } from "@/lib/appUrl";
 
 export class PaymentService {
-  public async initiateAdvancePayment(
+  public async initiatePayment(
     appointmentId: string,
     provider: PaymentProvider,
-    baseUrl: string
+    baseUrl: string,
+    paymentType: "ADVANCE" | "REMAINING" = "ADVANCE"
   ): Promise<PaymentInitOutput> {
     const appointment = await withRetry(() =>
       prisma.appointment.findUnique({
@@ -26,40 +27,66 @@ export class PaymentService {
 
     if (!appointment.salon.paymentAccount || appointment.salon.paymentAccount.verificationStatus !== "VERIFIED") {
       throw new Error(
-        "Online advance payment is unavailable for this salon because its payout account has not been verified by QSalons."
+        "Online payment is unavailable for this salon because its payout account has not been verified by QSalons."
       );
-    }
-
-    if (appointment.paymentStatus === "PAID" || appointment.status === "CONFIRMED") {
-      throw new Error("This appointment is already paid and confirmed.");
     }
 
     if (appointment.status === "CANCELLED") {
       throw new Error("This appointment was cancelled.");
     }
 
+    // Load platform default commission rate (basis points)
+    const platformConfig = await withRetry(() =>
+      prisma.platformPaymentConfig.findUnique({
+        where: { id: "platform-config" },
+      })
+    );
+    const rateBps = platformConfig?.defaultCommissionRateBps || 1000;
+
+    let amountToPayPkr = 0;
+    let amountToPayPaisa = 0;
+    let remainingAmountPkr = 0;
     const recalculateTotal = appointment.services.reduce((acc, s) => acc + s.service.pricePkr, 0);
     const totalPricePkr = recalculateTotal > 0 ? recalculateTotal : appointment.totalPricePkr;
-    const { advanceAmountPkr, advanceAmountPaisa, remainingAmountPkr } = calculateAdvancePayment(totalPricePkr);
 
-    // Mandatory 10% platform commission calculation on 50% advance
-    const comm = calculatePlatformCommission(advanceAmountPkr, 1000);
+    if (paymentType === "ADVANCE") {
+      if (appointment.paymentStatus === "PAID" || appointment.status === "CONFIRMED") {
+        throw new Error("This appointment already has an advance paid and confirmed.");
+      }
+      const calc = calculateAdvancePayment(totalPricePkr);
+      amountToPayPkr = calc.advanceAmountPkr;
+      amountToPayPaisa = calc.advanceAmountPaisa;
+      remainingAmountPkr = calc.remainingAmountPkr;
+
+      await withRetry(() =>
+        prisma.appointment.update({
+          where: { id: appointment.id },
+          data: {
+            totalPricePkr,
+            advanceAmountPkr: amountToPayPkr,
+            remainingAmountPkr,
+            paymentProvider: provider,
+          },
+        })
+      );
+    } else if (paymentType === "REMAINING") {
+      if (appointment.remainingAmountPkr <= 0) {
+        throw new Error("This appointment has no remaining balance due.");
+      }
+      amountToPayPkr = appointment.remainingAmountPkr;
+      amountToPayPaisa = amountToPayPkr * 100;
+      remainingAmountPkr = 0;
+    } else {
+      throw new Error(`Unsupported payment type: ${paymentType}`);
+    }
+
+    // Calculate platform commission on this payment step
+    const comm = calculatePlatformCommission(amountToPayPkr, rateBps);
 
     const timestamp = Date.now();
     const shortProvider = provider === "JAZZCASH" ? "JC" : "EP";
-    const internalRef = `QSC${shortProvider}${timestamp}${appointment.id.slice(-6).toUpperCase()}`.slice(0, 48);
-
-    await withRetry(() =>
-      prisma.appointment.update({
-        where: { id: appointment.id },
-        data: {
-          totalPricePkr,
-          advanceAmountPkr,
-          remainingAmountPkr,
-          paymentProvider: provider,
-        },
-      })
-    );
+    const typeCode = paymentType === "REMAINING" ? "REM" : "ADV";
+    const internalRef = `QSC${shortProvider}${typeCode}${timestamp}${appointment.id.slice(-6).toUpperCase()}`.slice(0, 48);
 
     await withRetry(() =>
       prisma.payment.create({
@@ -70,12 +97,13 @@ export class PaymentService {
           customerPhone: appointment.customerPhone,
           provider,
           internalRef,
+          paymentType,
           totalBookingPkr: totalPricePkr,
-          advanceRequiredPkr: advanceAmountPkr,
+          advanceRequiredPkr: amountToPayPkr,
           amountPaidPkr: 0,
           remainingBalancePkr: remainingAmountPkr,
-          amountPaisa: advanceAmountPaisa,
-          commissionRateBps: 1000,
+          amountPaisa: amountToPayPaisa,
+          commissionRateBps: rateBps,
           commissionPkr: comm.commissionPkr,
           commissionPaisa: comm.commissionPaisa,
           salonSharePkr: comm.salonAllocationPkr,
@@ -92,14 +120,23 @@ export class PaymentService {
       customerName: appointment.customerName,
       customerPhone: appointment.customerPhone,
       totalPkr: totalPricePkr,
-      advancePkr: advanceAmountPkr,
-      advancePaisa: advanceAmountPaisa,
+      advancePkr: amountToPayPkr,
+      advancePaisa: amountToPayPaisa,
       remainingPkr: remainingAmountPkr,
       internalRef,
       baseUrl,
+      paymentType,
     };
 
     return provider === "JAZZCASH" ? jazzCash.initiatePayment(initInput) : easypaisa.initiatePayment(initInput);
+  }
+
+  public async initiateAdvancePayment(
+    appointmentId: string,
+    provider: PaymentProvider,
+    baseUrl: string
+  ): Promise<PaymentInitOutput> {
+    return this.initiatePayment(appointmentId, provider, baseUrl, "ADVANCE");
   }
 
   public async findPaymentByCallback(payload: Record<string, string>) {
@@ -217,8 +254,9 @@ export class PaymentService {
     }
 
     const now = new Date();
-    const actualAdvancePkr = payment.advanceRequiredPkr;
-    const comm = calculatePlatformCommission(actualAdvancePkr, 1000);
+    const actualPaidPkr = payment.advanceRequiredPkr;
+    const rateBps = payment.commissionRateBps || 1000;
+    const comm = calculatePlatformCommission(actualPaidPkr, rateBps);
 
     // Atomic check-and-set: only update if status is still PENDING to prevent race conditions & duplicate commissions
     const claimed = await withRetry(() =>
@@ -228,9 +266,9 @@ export class PaymentService {
           status: "PAID",
           settlementStatus: "PENDING_SETTLEMENT",
           providerRef: verification.providerRef || `TXN_${Date.now()}`,
-          amountPaidPkr: actualAdvancePkr,
+          amountPaidPkr: actualPaidPkr,
           remainingBalancePkr: payment.remainingBalancePkr,
-          commissionRateBps: 1000,
+          commissionRateBps: rateBps,
           commissionPkr: comm.commissionPkr,
           commissionPaisa: comm.commissionPaisa,
           salonSharePkr: comm.salonAllocationPkr,
@@ -253,9 +291,10 @@ export class PaymentService {
           paymentId: payment.id,
           appointmentId: payment.appointmentId,
           salonId: payment.salonId,
+          paymentType: payment.paymentType,
           advanceAmountPaisa: payment.amountPaisa,
-          advanceAmountPkr: actualAdvancePkr,
-          rateBps: 1000,
+          advanceAmountPkr: actualPaidPkr,
+          rateBps,
           commissionPaisa: comm.commissionPaisa,
           commissionPkr: comm.commissionPkr,
           salonAllocationPaisa: comm.salonAllocationPaisa,
@@ -266,6 +305,7 @@ export class PaymentService {
           settlementStatus: "RETAINED",
         },
         update: {
+          paymentType: payment.paymentType,
           providerRef: verification.providerRef || payment.internalRef,
           status: "EARNED",
           settlementStatus: "RETAINED",
@@ -273,21 +313,37 @@ export class PaymentService {
       })
     );
 
-    // Confirm appointment
-    await withRetry(() =>
-      prisma.appointment.update({
-        where: { id: payment.appointmentId },
-        data: {
-          status: "CONFIRMED",
-          paymentStatus: "PAID",
-          paymentProvider: provider,
-          paymentRef: verification.providerRef || payment.internalRef,
-          paidAmountPkr: actualAdvancePkr,
-          remainingAmountPkr: payment.remainingBalancePkr,
-          expiresAt: null,
-        },
-      })
-    );
+    // Update appointment paid status
+    if (payment.paymentType === "REMAINING") {
+      await withRetry(() =>
+        prisma.appointment.update({
+          where: { id: payment.appointmentId },
+          data: {
+            status: "CONFIRMED",
+            paymentStatus: "PAID",
+            paidAmountPkr: payment.totalBookingPkr,
+            remainingAmountPkr: 0,
+            paymentProvider: provider,
+            paymentRef: verification.providerRef || payment.internalRef,
+          },
+        })
+      );
+    } else {
+      await withRetry(() =>
+        prisma.appointment.update({
+          where: { id: payment.appointmentId },
+          data: {
+            status: "CONFIRMED",
+            paymentStatus: "PAID",
+            paymentProvider: provider,
+            paymentRef: verification.providerRef || payment.internalRef,
+            paidAmountPkr: actualPaidPkr,
+            remainingAmountPkr: payment.remainingBalancePkr,
+            expiresAt: null,
+          },
+        })
+      );
+    }
 
     try {
       liveEvents.emit({

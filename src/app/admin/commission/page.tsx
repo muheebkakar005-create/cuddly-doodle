@@ -9,6 +9,7 @@ type CommissionItem = {
   paymentId: string;
   appointmentId: string;
   salonId: string;
+  paymentType?: string;
   advanceAmountPkr: number;
   rateBps: number;
   commissionPkr: number;
@@ -42,6 +43,7 @@ type ConfigData = {
   bankName?: string;
   branchCode?: string;
   businessName: string;
+  defaultCommissionRateBps?: number;
 };
 
 type MetricsData = {
@@ -50,6 +52,11 @@ type MetricsData = {
   totalSalonAllocationDisbursablePkr: number;
   jazzCashCommissionsPkr: number;
   easypaisaCommissionsPkr: number;
+  advancePaymentsCommissionPkr?: number;
+  remainingPaymentsCommissionPkr?: number;
+  pendingSettlementCommissionsPkr?: number;
+  settledCommissionsPkr?: number;
+  failedPaymentsCount?: number;
   totalTransactionsCount: number;
   commissionRateBps: number;
   commissionPercentage: number;
@@ -63,6 +70,11 @@ export default function AdminCommissionPage() {
     totalSalonAllocationDisbursablePkr: 0,
     jazzCashCommissionsPkr: 0,
     easypaisaCommissionsPkr: 0,
+    advancePaymentsCommissionPkr: 0,
+    remainingPaymentsCommissionPkr: 0,
+    pendingSettlementCommissionsPkr: 0,
+    settledCommissionsPkr: 0,
+    failedPaymentsCount: 0,
     totalTransactionsCount: 0,
     commissionRateBps: 1000,
     commissionPercentage: 10,
@@ -80,6 +92,7 @@ export default function AdminCommissionPage() {
   const [bankName, setBankName] = useState("");
   const [branchCode, setBranchCode] = useState("");
   const [businessName, setBusinessName] = useState("");
+  const [rateBps, setRateBps] = useState(1000);
   const [savingConfig, setSavingConfig] = useState(false);
   const [configMsg, setConfigMsg] = useState("");
 
@@ -103,6 +116,7 @@ export default function AdminCommissionPage() {
           setBankName(data.config.bankName || "");
           setBranchCode(data.config.branchCode || "");
           setBusinessName(data.config.businessName || "");
+          setRateBps(data.config.defaultCommissionRateBps || 1000);
         }
       }
     } catch (err) {
@@ -133,11 +147,12 @@ export default function AdminCommissionPage() {
           bankName,
           branchCode,
           businessName,
+          defaultCommissionRateBps: rateBps,
         }),
       });
       const data = await res.json();
       if (res.ok) {
-        setConfigMsg("Platform destination updated!");
+        setConfigMsg("Platform destination & commission rate updated!");
         setTimeout(() => {
           setShowConfigModal(false);
           loadData();
@@ -162,7 +177,7 @@ export default function AdminCommissionPage() {
             <span>Platform Commission Dashboard</span>
           </h1>
           <p className="text-xs text-white/50 mt-0.5">
-            Automated 10% platform commission on 50% customer advance online payments (1,000 basis points).
+            Automated QSalon platform commission on advance &amp; subsequent online payments ({metrics.commissionPercentage}% platform rate / {metrics.commissionRateBps} bps).
           </p>
         </div>
 
@@ -185,30 +200,30 @@ export default function AdminCommissionPage() {
         </div>
       </div>
 
-      {/* Metrics Row */}
+      {/* Metrics Row 1 */}
       <div className="grid gap-3 sm:grid-cols-4">
         {/* Total Earned */}
         <div className="rounded-2xl border border-gold/30 bg-[#16161D] p-4 shadow-lg space-y-1">
           <p className="text-[10px] uppercase font-bold tracking-wider text-gold">QSalon Net Commission</p>
           <p className="text-2xl font-bold text-white">{formatPkr(metrics.totalCommissionsEarnedPkr)}</p>
           <div className="flex items-center justify-between text-[10px] text-white/50 pt-1 border-t border-white/5">
-            <span>Fixed Platform Rate:</span>
-            <span className="font-bold text-emerald-400">10% (1,000 bps)</span>
+            <span>Configured Platform Rate:</span>
+            <span className="font-bold text-emerald-400">{metrics.commissionPercentage}% ({metrics.commissionRateBps} bps)</span>
           </div>
         </div>
 
         {/* Total Customer Advance Volume */}
         <div className="rounded-2xl border border-white/10 bg-[#16161D] p-4 shadow-lg space-y-1">
-          <p className="text-[10px] uppercase font-bold tracking-wider text-white/50">Gross Advance Processed</p>
+          <p className="text-[10px] uppercase font-bold tracking-wider text-white/50">Gross Online Volume</p>
           <p className="text-2xl font-bold text-white">{formatPkr(metrics.totalAdvanceVolumeProcessedPkr)}</p>
-          <p className="text-[10px] text-white/40">From {metrics.totalTransactionsCount} verified advance payments</p>
+          <p className="text-[10px] text-white/40">From {metrics.totalTransactionsCount} verified payments</p>
         </div>
 
         {/* Salon Share Disbursable */}
         <div className="rounded-2xl border border-emerald-500/20 bg-[#16161D] p-4 shadow-lg space-y-1">
-          <p className="text-[10px] uppercase font-bold tracking-wider text-emerald-400">Salons 90% Allocation</p>
+          <p className="text-[10px] uppercase font-bold tracking-wider text-emerald-400">Salons Net Allocation</p>
           <p className="text-2xl font-bold text-emerald-300">{formatPkr(metrics.totalSalonAllocationDisbursablePkr)}</p>
-          <p className="text-[10px] text-white/40">Allocated to verified salon bank/wallets</p>
+          <p className="text-[10px] text-white/40">Payable to verified salon payout accounts</p>
         </div>
 
         {/* Gateway Distribution */}
@@ -224,6 +239,34 @@ export default function AdminCommissionPage() {
               <span className="font-bold text-white">{formatPkr(metrics.easypaisaCommissionsPkr)}</span>
             </div>
           </div>
+        </div>
+      </div>
+
+      {/* Metrics Row 2: Status Tracking & Payment Breakdown */}
+      <div className="grid gap-3 sm:grid-cols-4">
+        {/* Advance vs Subsequent Payments Breakdown */}
+        <div className="rounded-2xl border border-white/10 bg-[#16161D] p-4 shadow space-y-1">
+          <p className="text-[10px] uppercase font-bold tracking-wider text-white/50">50% Advance Commissions</p>
+          <p className="text-xl font-bold text-white">{formatPkr(metrics.advancePaymentsCommissionPkr || 0)}</p>
+          <p className="text-[10px] text-white/40">From initial 50% bookings</p>
+        </div>
+
+        <div className="rounded-2xl border border-white/10 bg-[#16161D] p-4 shadow space-y-1">
+          <p className="text-[10px] uppercase font-bold tracking-wider text-cyan-400">Subsequent Online Payments</p>
+          <p className="text-xl font-bold text-cyan-300">{formatPkr(metrics.remainingPaymentsCommissionPkr || 0)}</p>
+          <p className="text-[10px] text-white/40">From remaining balances paid online</p>
+        </div>
+
+        <div className="rounded-2xl border border-amber-500/20 bg-[#16161D] p-4 shadow space-y-1">
+          <p className="text-[10px] uppercase font-bold tracking-wider text-amber-400">Pending Settlements</p>
+          <p className="text-xl font-bold text-amber-300">{formatPkr(metrics.pendingSettlementCommissionsPkr || 0)}</p>
+          <p className="text-[10px] text-white/40">Awaiting salon batch disbursement</p>
+        </div>
+
+        <div className="rounded-2xl border border-rose-500/20 bg-[#16161D] p-4 shadow space-y-1">
+          <p className="text-[10px] uppercase font-bold tracking-wider text-rose-400">Failed Gateway Checkouts</p>
+          <p className="text-xl font-bold text-rose-300">{metrics.failedPaymentsCount || 0}</p>
+          <p className="text-[10px] text-white/40">Customer declines or timeouts</p>
         </div>
       </div>
 
@@ -284,10 +327,11 @@ export default function AdminCommissionPage() {
               <tr>
                 <th className="px-4 py-3">Date & Booking</th>
                 <th className="px-4 py-3">Salon & Area</th>
+                <th className="px-4 py-3">Type</th>
                 <th className="px-4 py-3">Total Service</th>
-                <th className="px-4 py-3">50% Advance Paid</th>
-                <th className="px-4 py-3 text-gold">QSalon 10% Commission</th>
-                <th className="px-4 py-3 text-emerald-400">Salon 90% Allocation</th>
+                <th className="px-4 py-3">Amount Paid</th>
+                <th className="px-4 py-3 text-gold">QSalon Commission</th>
+                <th className="px-4 py-3 text-emerald-400">Salon Allocation</th>
                 <th className="px-4 py-3">Provider Ref</th>
                 <th className="px-4 py-3">Status</th>
               </tr>
@@ -305,6 +349,16 @@ export default function AdminCommissionPage() {
                     <p className="text-[10px] text-white/50">{c.salon.quettaArea}</p>
                   </td>
 
+                  <td className="px-4 py-3">
+                    <span className={`inline-block rounded px-2 py-0.5 text-[9px] font-bold ${
+                      c.paymentType === "REMAINING"
+                        ? "bg-cyan-500/20 text-cyan-300 border border-cyan-500/30"
+                        : "bg-gold/20 text-gold border border-gold/30"
+                    }`}>
+                      {c.paymentType === "REMAINING" ? "Remaining" : "50% Advance"}
+                    </span>
+                  </td>
+
                   <td className="px-4 py-3 font-semibold text-white/80">
                     {formatPkr(c.payment.totalBookingPkr)}
                   </td>
@@ -315,12 +369,12 @@ export default function AdminCommissionPage() {
 
                   <td className="px-4 py-3 font-bold text-gold text-sm">
                     {formatPkr(c.commissionPkr)}
-                    <span className="block text-[9px] text-white/40 font-normal">10% of advance</span>
+                    <span className="block text-[9px] text-white/40 font-normal">{(c.rateBps || 1000) / 100}% fee</span>
                   </td>
 
                   <td className="px-4 py-3 font-bold text-emerald-400">
                     {formatPkr(c.salonAllocationPkr)}
-                    <span className="block text-[9px] text-white/40 font-normal">90% of advance</span>
+                    <span className="block text-[9px] text-white/40 font-normal">{100 - (c.rateBps || 1000) / 100}% net share</span>
                   </td>
 
                   <td className="px-4 py-3">
@@ -422,6 +476,38 @@ export default function AdminCommissionPage() {
                   />
                 </div>
               )}
+
+              <div>
+                <label className="block text-[10px] font-bold uppercase tracking-wider text-white/70 mb-1">
+                  Default Platform Commission Rate
+                </label>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setRateBps(1000)}
+                    className={`rounded-xl border py-2 text-xs font-bold transition-all cursor-pointer ${
+                      rateBps === 1000
+                        ? "border-gold bg-gold/15 text-gold"
+                        : "border-white/10 bg-[#1C1C24] text-white/60"
+                    }`}
+                  >
+                    10% (1,000 bps)
+                    <span className="block text-[9px] font-normal text-white/40">5% of full booking</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setRateBps(500)}
+                    className={`rounded-xl border py-2 text-xs font-bold transition-all cursor-pointer ${
+                      rateBps === 500
+                        ? "border-gold bg-gold/15 text-gold"
+                        : "border-white/10 bg-[#1C1C24] text-white/60"
+                    }`}
+                  >
+                    5% (500 bps)
+                    <span className="block text-[9px] font-normal text-white/40">2.5% of full booking</span>
+                  </button>
+                </div>
+              </div>
 
               {configMsg && (
                 <p className="text-xs text-emerald-400 font-semibold">{configMsg}</p>

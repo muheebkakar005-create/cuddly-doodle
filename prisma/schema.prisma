@@ -198,6 +198,7 @@ model Payment {
   provider            String              // JAZZCASH, EASYPAISA
   internalRef         String              @unique
   providerRef         String?
+  paymentType         String              @default("ADVANCE") // ADVANCE, REMAINING, FULL
   totalBookingPkr     Int
   advanceRequiredPkr  Int
   amountPaidPkr       Int                 @default(0)
@@ -230,6 +231,7 @@ model Payment {
   @@index([providerRef])
   @@index([status])
   @@index([settlementStatus])
+  @@index([paymentType])
 }
 
 model PlatformCommission {
@@ -239,6 +241,7 @@ model PlatformCommission {
   appointmentId        String
   salonId              String
   salon                Salon       @relation(fields: [salonId], references: [id], onDelete: Cascade)
+  paymentType          String      @default("ADVANCE") // ADVANCE, REMAINING, FULL
   advanceAmountPaisa   Int
   advanceAmountPkr     Int
   rateBps              Int         @default(1000) // 10% = 1000 basis points
@@ -257,19 +260,21 @@ model PlatformCommission {
   @@index([salonId])
   @@index([status])
   @@index([settlementStatus])
+  @@index([paymentType])
   @@index([createdAt])
 }
 
 model PlatformPaymentConfig {
-  id                String   @id @default("platform-config")
-  accountHolderName String   @default("QSalon Platform Collection")
-  provider          String   @default("JAZZCASH") // JAZZCASH, EASYPAISA, BANK
-  accountNumber     String   @default("03000000000")
-  bankName          String?  @default("")
-  branchCode        String?  @default("")
-  businessName      String   @default("Devbase / QSalon")
-  updatedBy         String   @default("System")
-  updatedAt         DateTime @default(now()) @updatedAt
+  id                     String   @id @default("platform-config")
+  accountHolderName      String   @default("QSalon Platform Collection")
+  provider               String   @default("JAZZCASH") // JAZZCASH, EASYPAISA, BANK
+  accountNumber          String   @default("03000000000")
+  bankName               String?  @default("")
+  branchCode             String?  @default("")
+  businessName           String   @default("Devbase / QSalon")
+  defaultCommissionRateBps Int     @default(1000) // 1000 = 10% of advance (5% of full booking)
+  updatedBy              String   @default("System")
+  updatedAt              DateTime @default(now()) @updatedAt
 }
 
 model AppointmentService {

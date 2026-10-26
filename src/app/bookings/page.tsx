@@ -283,9 +283,11 @@ export default function BookingsPage() {
                   </div>
 
                   <div className="flex justify-between items-center pt-1 border-t border-white/5">
-                    <span className="text-white/60">Payable at Salon:</span>
-                    <span className="font-bold text-gold">
-                      {formatPkr(remainingAmount)}
+                    <span className="text-white/60">
+                      {remainingAmount === 0 ? "Remaining Balance:" : "Payable at Salon:"}
+                    </span>
+                    <span className={`font-bold ${remainingAmount === 0 ? "text-emerald-400" : "text-gold"}`}>
+                      {remainingAmount === 0 ? "PKR 0 (Fully Paid)" : formatPkr(remainingAmount)}
                     </span>
                   </div>
 
@@ -297,6 +299,25 @@ export default function BookingsPage() {
                       >
                         ⚡ Complete 50% Advance ({formatPkr(advanceAmount)})
                       </Link>
+                    </div>
+                  )}
+
+                  {isPaid && remainingAmount > 0 && r.status !== "CANCELLED" && (
+                    <div className="pt-2">
+                      <Link
+                        href={`/bookings/confirmed?id=${r.id}`}
+                        className="block w-full text-center rounded-xl bg-cyan-500/15 border border-cyan-500/30 py-2 text-xs font-bold text-cyan-300 hover:bg-cyan-500/25 transition-all"
+                      >
+                        💳 Pay Remaining Online ({formatPkr(remainingAmount)})
+                      </Link>
+                    </div>
+                  )}
+
+                  {isPaid && remainingAmount === 0 && (
+                    <div className="pt-1.5 text-center">
+                      <span className="inline-block rounded-lg bg-emerald-500/15 px-2.5 py-1 text-[10px] font-bold text-emerald-400 border border-emerald-500/30">
+                        ✓ Fully Paid Online (0 Balance Due)
+                      </span>
                     </div>
                   )}
                 </div>

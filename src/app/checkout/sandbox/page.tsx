@@ -16,11 +16,15 @@ function SandboxCheckoutInner() {
     payment?: {
       internalRef: string;
       provider: string;
+      paymentType?: string;
       status: string;
       totalBookingPkr: number;
       advanceRequiredPkr: number;
       amountPaidPkr: number;
       remainingBalancePkr: number;
+      commissionRateBps?: number;
+      commissionPkr?: number;
+      salonSharePkr?: number;
     };
     appointment?: {
       id: string;
@@ -89,14 +93,14 @@ function SandboxCheckoutInner() {
         </div>
 
         <h1 className="mt-3 text-2xl font-bold font-display text-white">
-          Complete 50% Advance Payment
+          {payment.paymentType === "REMAINING" ? "Complete Remaining Balance Payment" : "Complete 50% Advance Payment"}
         </h1>
         <p className="mt-1 text-xs text-white/60">
           Transaction Reference: <span className="font-mono text-gold">{payment.internalRef}</span>
         </p>
       </div>
 
-      {/* Mandatory 50% Payment Rule Breakdown */}
+      {/* Payment Rule Breakdown */}
       <div className="rounded-3xl border border-white/15 bg-[#16161D] p-5 sm:p-6 space-y-3.5 shadow-xl">
         <div className="flex items-center justify-between pb-3 border-b border-white/10">
           <span className="text-xs text-white/70">Total Salon Service Price</span>
@@ -105,7 +109,9 @@ function SandboxCheckoutInner() {
 
         <div className="flex items-center justify-between p-3.5 rounded-2xl bg-gold/10 border border-gold/30">
           <div>
-            <p className="text-xs font-bold text-gold">50% Advance Online Required</p>
+            <p className="text-xs font-bold text-gold">
+              {payment.paymentType === "REMAINING" ? "Remaining Balance Due" : "50% Advance Online Required"}
+            </p>
             <p className="text-[10px] text-white/60">Payable now via {isJazzCash ? "JazzCash" : "Easypaisa"}</p>
           </div>
           <span className="text-lg font-black text-gold">{formatPkr(payment.advanceRequiredPkr)}</span>
@@ -115,18 +121,26 @@ function SandboxCheckoutInner() {
         <div className="rounded-2xl bg-[#1C1C24] p-3 border border-white/5 space-y-1.5 text-xs">
           <p className="text-[10px] font-bold uppercase tracking-wider text-white/40">Automated Financial Split</p>
           <div className="flex justify-between text-white/70">
-            <span>• QSalon Platform Commission (10% of advance):</span>
-            <span className="font-bold text-gold">{formatPkr(split.commissionPkr)}</span>
+            <span>• QSalon Platform Commission ({(payment.commissionRateBps || 1000) / 100}% fee):</span>
+            <span className="font-bold text-gold">
+              {formatPkr(payment.commissionPkr !== undefined ? payment.commissionPkr : split.commissionPkr)}
+            </span>
           </div>
           <div className="flex justify-between text-white/70">
-            <span>• Salon Allocation (90% of advance):</span>
-            <span className="font-bold text-emerald-400">{formatPkr(split.salonAllocationFromAdvancePkr)}</span>
+            <span>• Salon Allocation ({100 - (payment.commissionRateBps || 1000) / 100}% share):</span>
+            <span className="font-bold text-emerald-400">
+              {formatPkr(payment.salonSharePkr !== undefined ? payment.salonSharePkr : split.salonAllocationFromAdvancePkr)}
+            </span>
           </div>
         </div>
 
         <div className="flex items-center justify-between pt-1 text-xs text-white/70">
-          <span>Remaining Balance (50%)</span>
-          <span className="font-semibold text-white">{formatPkr(payment.remainingBalancePkr)} payable at salon</span>
+          <span>
+            {payment.paymentType === "REMAINING" ? "Status After Payment" : "Remaining Counter Balance"}
+          </span>
+          <span className="font-semibold text-white">
+            {payment.paymentType === "REMAINING" ? "Zero Balance (Fully Paid)" : `${formatPkr(payment.remainingBalancePkr)} payable at salon`}
+          </span>
         </div>
       </div>
 
