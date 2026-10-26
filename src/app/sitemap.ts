@@ -27,8 +27,16 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     { url: `${siteUrl}/quetta/quetta-cantt`, lastModified: now, changeFrequency: "weekly", priority: 0.8 },
     { url: `${siteUrl}/quetta/airport-road`, lastModified: now, changeFrequency: "weekly", priority: 0.8 },
 
+    // ── Company & Trust Pages ───────────────────────────────────────────────
+    { url: `${siteUrl}/about`, lastModified: now, changeFrequency: "monthly", priority: 0.75 },
+    { url: `${siteUrl}/contact`, lastModified: now, changeFrequency: "monthly", priority: 0.75 },
+    { url: `${siteUrl}/terms`, lastModified: now, changeFrequency: "monthly", priority: 0.5 },
+    { url: `${siteUrl}/privacy`, lastModified: now, changeFrequency: "monthly", priority: 0.5 },
+    { url: `${siteUrl}/refund-policy`, lastModified: now, changeFrequency: "monthly", priority: 0.6 },
+
     // ── User-facing utility routes ──────────────────────────────────────────
     { url: `${siteUrl}/bookings`, lastModified: now, changeFrequency: "weekly", priority: 0.7 },
+    { url: `${siteUrl}/register`, lastModified: now, changeFrequency: "monthly", priority: 0.6 },
     { url: `${siteUrl}/owner/register`, lastModified: now, changeFrequency: "monthly", priority: 0.6 },
     { url: `${siteUrl}/login`, lastModified: now, changeFrequency: "monthly", priority: 0.4 },
   ];

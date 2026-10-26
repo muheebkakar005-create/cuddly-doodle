@@ -35,6 +35,7 @@ export function BookingEngine({
     whatsappNumber: string;
     services: Service[];
     staff: Staff[];
+    paymentAccount?: { verificationStatus: string } | null;
   };
 }) {
   const days = nextSevenDays();
@@ -56,6 +57,7 @@ export function BookingEngine({
   const duration = picked.reduce((a, s) => a + s.durationMinutes, 0) || 45;
 
   // 50% Advance Online Payment Calculation
+  const paymentsEnabled = salon.paymentAccount?.verificationStatus === "VERIFIED";
   const { advanceAmountPkr, remainingAmountPkr } =
     total > 0 ? calculateAdvancePayment(total) : { advanceAmountPkr: 0, remainingAmountPkr: 0 };
 
@@ -121,13 +123,18 @@ export function BookingEngine({
       }
 
       const appointmentId = data.appointment.id;
+      const accessToken = data.appointment.accessToken || data.accessToken;
 
-      // Save appointment reference in customer local storage
       try {
         const ids: string[] = JSON.parse(localStorage.getItem("qsc_bookings") || "[]");
         if (!ids.includes(appointmentId)) {
           ids.unshift(appointmentId);
           localStorage.setItem("qsc_bookings", JSON.stringify(ids.slice(0, 20)));
+        }
+        const tokens: string[] = JSON.parse(localStorage.getItem("qsc_booking_tokens") || "[]");
+        if (accessToken && !tokens.includes(accessToken)) {
+          tokens.unshift(accessToken);
+          localStorage.setItem("qsc_booking_tokens", JSON.stringify(tokens.slice(0, 20)));
         }
         localStorage.setItem("qsc_phone", normalizePakistaniPhone(phone) || phone);
       } catch {}
@@ -458,8 +465,13 @@ export function BookingEngine({
           </div>
         </div>
 
+        {!paymentsEnabled && (
+          <div className="rounded-xl bg-amber-500/15 border border-amber-500/30 p-2.5 text-xs text-amber-200">
+            This salon’s payout account is not verified yet, so online 50% advance checkout is disabled.
+          </div>
+        )}
         <p className="text-[10px] text-white/60 leading-relaxed">
-          Select your online payment method. You will be redirected to complete the 50% advance payment to reserve your time slot.
+          Select JazzCash or Easypaisa. The amount charged is calculated on the server from the salon’s stored PKR prices. Funds settle to the QSalons merchant account, then payout to the salon after admin verification — personal wallet numbers are not JazzCash/Easypaisa merchant settlement destinations.
         </p>
 
         {/* Provider Radio Options */}
@@ -523,7 +535,7 @@ export function BookingEngine({
 
           <button
             type="button"
-            disabled={loading || picked.length === 0 || !time}
+            disabled={loading || !paymentsEnabled || picked.length === 0 || !time}
             onClick={handleProceedToPayment}
             className={`rounded-2xl px-5 py-3 text-xs font-bold shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer ${
               provider === "JAZZCASH"

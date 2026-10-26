@@ -4,7 +4,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { AREAS, CATEGORIES } from "@/lib/constants";
-import { CalendarIcon, MapPinIcon, ShieldLockIcon, WhatsAppIcon } from "./Icons";
+import { MapPinIcon, ShieldLockIcon, WhatsAppIcon } from "./Icons";
 
 export function Footer() {
   const pathname = usePathname();
@@ -24,7 +24,7 @@ export function Footer() {
       {/* Main Footer Content */}
       <div className="mx-auto max-w-6xl px-4 py-10 sm:py-14">
         <div className="grid grid-cols-1 gap-8 sm:grid-cols-2 lg:grid-cols-5">
-          {/* Column 1: Brand Info & Guarantee (takes 2 cols on lg) */}
+          {/* Column 1: Brand Info & Guarantee */}
           <div className="lg:col-span-2 space-y-4">
             <Link href="/" className="inline-block">
               <Image
@@ -37,7 +37,7 @@ export function Footer() {
             </Link>
 
             <p className="text-xs leading-relaxed text-white/60 max-w-sm">
-              Quetta’s premier salon booking platform. Discover top-rated barbers, ladies parlours, and luxury spas across Quetta with verified prices in PKR and instant WhatsApp confirmation.
+              Quetta&apos;s premier salon booking platform. Discover top-rated barbers, ladies parlours, and luxury spas across Quetta with verified prices in PKR, 50% advance protection, and instant WhatsApp confirmation.
             </p>
 
             {/* Trust Badges */}
@@ -49,6 +49,10 @@ export function Footer() {
               <span className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-[#16161D] px-3 py-1 text-[11px] font-medium text-white/80">
                 <WhatsAppIcon className="h-3 w-3 text-emerald-400" />
                 WhatsApp Confirmation
+              </span>
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-[#16161D] px-3 py-1 text-[11px] font-medium text-gold">
+                <span>🛡️</span>
+                50% Advance Guarantee
               </span>
             </div>
 
@@ -78,7 +82,7 @@ export function Footer() {
                   href="/explore?q=Bridal"
                   className="text-white/60 hover:text-gold transition-colors inline-block py-0.5"
                 >
-                  Bridal & Grooming Packages
+                  Bridal &amp; Grooming Packages
                 </Link>
               </li>
               <li>
@@ -86,7 +90,7 @@ export function Footer() {
                   href="/explore?q=Facial"
                   className="text-white/60 hover:text-gold transition-colors inline-block py-0.5"
                 >
-                  HydraFacial & Skincare
+                  HydraFacial &amp; Skincare
                 </Link>
               </li>
             </ul>
@@ -117,10 +121,43 @@ export function Footer() {
             </ul>
           </div>
 
-          {/* Column 4: Portals & Help */}
+          {/* Column 4: Company & Legal */}
           <div>
-            <h3 className="text-xs font-bold uppercase tracking-wider text-white">Portals & Support</h3>
+            <h3 className="text-xs font-bold uppercase tracking-wider text-white">Company &amp; Legal</h3>
             <ul className="mt-3 space-y-2 text-xs">
+              <li>
+                <Link href="/about" className="text-white/60 hover:text-gold transition-colors inline-block py-0.5">
+                  About Q_Salons
+                </Link>
+              </li>
+              <li>
+                <Link href="/contact" className="text-white/60 hover:text-gold transition-colors inline-block py-0.5">
+                  Contact &amp; Support
+                </Link>
+              </li>
+              <li>
+                <Link href="/terms" className="text-white/60 hover:text-gold transition-colors inline-block py-0.5">
+                  Terms of Service
+                </Link>
+              </li>
+              <li>
+                <Link href="/privacy" className="text-white/60 hover:text-gold transition-colors inline-block py-0.5">
+                  Privacy Policy
+                </Link>
+              </li>
+              <li>
+                <Link href="/refund-policy" className="text-white/60 hover:text-gold transition-colors inline-block py-0.5">
+                  50% Refund Policy
+                </Link>
+              </li>
+              <li className="pt-2">
+                <Link
+                  href="/owner/register"
+                  className="text-gold font-semibold hover:underline inline-block py-0.5"
+                >
+                  Register Your Salon →
+                </Link>
+              </li>
               <li>
                 <Link
                   href="/login"
@@ -129,34 +166,6 @@ export function Footer() {
                   <ShieldLockIcon className="h-3.5 w-3.5 text-gold" />
                   <span>Portal Sign In</span>
                 </Link>
-              </li>
-              <li>
-                <Link
-                  href="/owner/register"
-                  className="text-white/60 hover:text-gold transition-colors inline-block py-0.5"
-                >
-                  Register Your Salon
-                </Link>
-              </li>
-              <li>
-                <Link
-                  href="/bookings"
-                  className="inline-flex items-center gap-1.5 text-white/60 hover:text-gold transition-colors py-0.5"
-                >
-                  <CalendarIcon className="h-3 w-3 text-gold" />
-                  <span>Track Appointments</span>
-                </Link>
-              </li>
-              <li className="pt-2">
-                <a
-                  href="https://wa.me/923000000000?text=Hello%20Q_Salons%20Help%20Desk"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1.5 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-1 text-xs font-semibold text-emerald-300 hover:bg-emerald-500/20 transition-colors"
-                >
-                  <WhatsAppIcon className="h-3.5 w-3.5 text-emerald-400" />
-                  <span>WhatsApp Support</span>
-                </a>
               </li>
             </ul>
           </div>
@@ -173,9 +182,13 @@ export function Footer() {
             </p>
           </div>
           <div className="flex flex-wrap items-center justify-center gap-4 text-[11px]">
-            <span className="text-white/70">100% Free Booking</span>
+            <Link href="/terms" className="text-white/60 hover:text-white">Terms</Link>
             <span>•</span>
-            <span className="text-gold font-medium">Balochistan</span>
+            <Link href="/privacy" className="text-white/60 hover:text-white">Privacy</Link>
+            <span>•</span>
+            <Link href="/refund-policy" className="text-white/60 hover:text-white">Refunds</Link>
+            <span>•</span>
+            <span className="text-gold font-medium">Quetta, Balochistan</span>
           </div>
         </div>
       </div>

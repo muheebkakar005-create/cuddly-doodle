@@ -3,16 +3,17 @@ import { jwtVerify } from "jose";
 
 const SESSION_COOKIE = "qsc_session";
 
-type Payload = { role?: string; salonId?: string };
+type Payload = { role?: string; salonId?: string; permissions?: string[] };
 
 async function session(req: NextRequest): Promise<Payload | null> {
   const token = req.cookies.get(SESSION_COOKIE)?.value;
   if (!token) return null;
   try {
-    const { payload } = await jwtVerify(
-      token,
-      new TextEncoder().encode(process.env.JWT_SECRET || "dev-secret"),
-    );
+    const secret = process.env.JWT_SECRET || "";
+    if (process.env.NODE_ENV === "production" && (!secret || secret === "dev-secret")) {
+      return null;
+    }
+    const { payload } = await jwtVerify(token, new TextEncoder().encode(secret || "dev-secret-local-only"));
     return payload as Payload;
   } catch {
     return null;
@@ -33,9 +34,9 @@ export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
   const user = await session(req);
 
-  // Allow public authentication & onboarding routes
   if (
     pathname.startsWith("/login") ||
+    pathname.startsWith("/register") ||
     pathname.startsWith("/admin/login") ||
     pathname.startsWith("/owner/login") ||
     pathname.startsWith("/owner/register")
@@ -43,21 +44,33 @@ export async function middleware(req: NextRequest) {
     return NextResponse.next();
   }
 
-  // Super Admin routes: strictly restricted to admin role
   if (pathname.startsWith("/super-admin") || pathname.startsWith("/admin")) {
     if (user?.role !== "admin") return unauthorized(req, "/login");
     return NextResponse.next();
   }
 
-  // Shop Owner routes: accessible to owner or admin
   if (pathname.startsWith("/shop-owner") || pathname.startsWith("/owner")) {
-    if (user?.role !== "owner" && user?.role !== "admin") return unauthorized(req, "/login");
+    if (user?.role !== "owner" && user?.role !== "admin" && user?.role !== "staff") {
+      return unauthorized(req, "/login");
+    }
+    if (user?.role === "staff") {
+      const staffBlocked = pathname.startsWith("/owner/payments") || pathname.startsWith("/owner/profile") || pathname === "/owner";
+      if (staffBlocked && !user.permissions?.includes("payments")) {
+        const url = req.nextUrl.clone();
+        url.pathname = "/owner/bookings";
+        return NextResponse.redirect(url);
+      }
+    }
     return NextResponse.next();
   }
 
-  // API protection
   if (pathname.startsWith("/api/owner")) {
-    if (user?.role !== "owner" && user?.role !== "admin") return unauthorized(req, "/login");
+    if (user?.role !== "owner" && user?.role !== "admin" && user?.role !== "staff") {
+      return unauthorized(req, "/login");
+    }
+    if (user?.role === "staff" && pathname.startsWith("/api/owner/payment-account")) {
+      return NextResponse.json({ error: "Staff cannot change payout settings." }, { status: 403 });
+    }
     return NextResponse.next();
   }
 

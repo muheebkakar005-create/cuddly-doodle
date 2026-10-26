@@ -5,7 +5,7 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AREAS, CATEGORIES } from "@/lib/constants";
 import { Logo } from "./Logo";
-import { CalendarIcon, MapPinIcon, SearchIcon, ShieldLockIcon } from "./Icons";
+import { CalendarIcon, MapPinIcon, SearchIcon, ShieldLockIcon, UserIcon } from "./Icons";
 import { useAuth } from "@/context/AuthContext";
 import { AppQrModal } from "./AppQrModal";
 
@@ -220,7 +220,7 @@ export function Header() {
                 className="inline-flex items-center gap-1.5 rounded-full bg-white px-3.5 py-1.5 text-xs font-bold text-black hover:bg-white/90 shadow-sm transition-colors"
               >
                 <ShieldLockIcon className="h-3.5 w-3.5 text-black" />
-                <span>Admin Dashboard</span>
+                <span>Admin</span>
               </Link>
               <button
                 type="button"
@@ -246,14 +246,39 @@ export function Header() {
                 <span>Logout</span>
               </button>
             </>
+          ) : currentUser?.role === "customer" ? (
+            <>
+              <Link
+                href="/bookings"
+                className="inline-flex items-center gap-1.5 rounded-full border border-white/20 bg-white/10 px-3.5 py-1.5 text-xs font-bold text-white hover:bg-white/20 transition-colors"
+              >
+                <UserIcon className="h-3.5 w-3.5 text-gold" />
+                <span>{currentUser.name || "My Account"}</span>
+              </Link>
+              <button
+                type="button"
+                onClick={() => logout()}
+                className="inline-flex items-center gap-1 rounded-full bg-rose-500/10 border border-rose-500/20 px-3 py-1.5 text-xs font-bold text-rose-300 hover:bg-rose-500/20 transition-colors cursor-pointer"
+              >
+                <span>Logout</span>
+              </button>
+            </>
           ) : (
-            <Link
-              href="/login"
-              className="inline-flex items-center gap-1.5 rounded-full bg-white px-4 py-1.5 text-xs font-bold text-black hover:bg-white/90 shadow-sm transition-colors"
-            >
-              <ShieldLockIcon className="h-3.5 w-3.5 text-black" />
-              <span>Sign In</span>
-            </Link>
+            <div className="flex items-center gap-1.5">
+              <Link
+                href="/login"
+                className="inline-flex items-center gap-1.5 rounded-full bg-white px-3.5 py-1.5 text-xs font-bold text-black hover:bg-white/90 shadow-sm transition-colors"
+              >
+                <ShieldLockIcon className="h-3.5 w-3.5 text-black" />
+                <span>Sign In</span>
+              </Link>
+              <Link
+                href="/register"
+                className="inline-flex items-center gap-1 rounded-full border border-white/20 bg-[#16161D] px-3 py-1.5 text-xs font-semibold text-white/80 hover:bg-white/10 transition-colors"
+              >
+                <span>Register</span>
+              </Link>
+            </div>
           )}
         </div>
       </div>
@@ -319,7 +344,7 @@ export function Header() {
                 onClick={() => setUserMenuOpen((v) => !v)}
                 className="flex h-8 items-center gap-1 rounded-full bg-white text-black px-2.5 text-[11px] font-bold shadow-sm active:scale-95 transition-all cursor-pointer"
               >
-                <span>{currentUser.role === "admin" ? "Admin" : "Portal"}</span>
+                <span>{currentUser.role === "admin" ? "Admin" : currentUser.role === "customer" ? "Account" : "Portal"}</span>
                 <span className="text-[8px] opacity-60">▼</span>
               </button>
 
@@ -330,27 +355,29 @@ export function Header() {
                       Signed in as
                     </p>
                     <p className="text-xs font-bold text-white truncate">
-                      {currentUser.role === "admin" ? "Super Admin" : "Shop Owner"}
+                      {currentUser.role === "admin" ? "Super Admin" : currentUser.role === "customer" ? (currentUser.name || "Customer") : "Shop Owner"}
                     </p>
                     <p className="text-[10px] text-white/60 truncate">{currentUser.email}</p>
                   </div>
 
                   <div className="py-1">
-                    <Link
-                      href={currentUser.role === "admin" ? "/super-admin/dashboard" : "/shop-owner/dashboard"}
-                      onClick={() => setUserMenuOpen(false)}
-                      className="flex items-center gap-2 rounded-xl px-3 py-2 text-xs font-semibold text-white hover:bg-white/10 transition-colors"
-                    >
-                      <span>📊</span>
-                      <span>Dashboard</span>
-                    </Link>
+                    {currentUser.role !== "customer" && (
+                      <Link
+                        href={currentUser.role === "admin" ? "/super-admin/dashboard" : "/shop-owner/dashboard"}
+                        onClick={() => setUserMenuOpen(false)}
+                        className="flex items-center gap-2 rounded-xl px-3 py-2 text-xs font-semibold text-white hover:bg-white/10 transition-colors"
+                      >
+                        <span>📊</span>
+                        <span>Dashboard</span>
+                      </Link>
+                    )}
                     <Link
                       href="/bookings"
                       onClick={() => setUserMenuOpen(false)}
                       className="flex items-center gap-2 rounded-xl px-3 py-2 text-xs font-semibold text-white hover:bg-white/10 transition-colors"
                     >
                       <span>📅</span>
-                      <span>Appointments</span>
+                      <span>My Bookings</span>
                     </Link>
                     <button
                       type="button"
@@ -414,7 +441,7 @@ export function Header() {
         </div>
       )}
 
-      {/* 4. App QR Code Modal (portaled directly to document.body) */}
+      {/* 4. App QR Code Modal */}
       <AppQrModal isOpen={qrModalOpen} onClose={() => setQrModalOpen(false)} />
     </header>
   );

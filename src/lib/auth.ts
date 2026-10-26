@@ -1,6 +1,7 @@
 import { SignJWT, jwtVerify } from "jose";
 import { cookies } from "next/headers";
 import bcrypt from "bcryptjs";
+import { isProductionRuntime } from "./appUrl";
 
 export const SESSION_COOKIE = "qsc_session";
 
@@ -8,11 +9,19 @@ export type SessionUser = {
   userId: string;
   email: string;
   role: string;
+  name?: string;
+  phone?: string;
   salonId?: string;
+  staffId?: string;
+  permissions?: string[];
 };
 
 function secret() {
-  return new TextEncoder().encode(process.env.JWT_SECRET || "dev-secret");
+  const value = process.env.JWT_SECRET || "";
+  if (isProductionRuntime() && (!value || value === "dev-secret" || value.length < 16)) {
+    throw new Error("JWT_SECRET must be set to a strong value in production.");
+  }
+  return new TextEncoder().encode(value || "dev-secret-local-only");
 }
 
 export async function hashPassword(plain: string) {
@@ -35,12 +44,16 @@ export async function verifySessionToken(token: string): Promise<SessionUser | n
   try {
     const { payload } = await jwtVerify(token, secret());
     const role = String(payload.role || "");
-    if (role !== "admin" && role !== "owner") return null;
+    if (!["admin", "owner", "staff", "customer"].includes(role)) return null;
     return {
       userId: String(payload.userId),
       email: String(payload.email),
       role,
+      name: payload.name ? String(payload.name) : undefined,
+      phone: payload.phone ? String(payload.phone) : undefined,
       salonId: payload.salonId ? String(payload.salonId) : undefined,
+      staffId: payload.staffId ? String(payload.staffId) : undefined,
+      permissions: Array.isArray(payload.permissions) ? payload.permissions.map(String) : undefined,
     };
   } catch {
     return null;
@@ -76,6 +89,20 @@ export function canManageSalon(session: SessionUser | null, salonId: string) {
   return session.role === "owner" && session.salonId === salonId;
 }
 
+export function canManageBookings(session: SessionUser | null, salonId: string) {
+  if (canManageSalon(session, salonId)) return true;
+  if (!session || session.salonId !== salonId) return false;
+  if (session.role === "staff") {
+    return !session.permissions || session.permissions.includes("bookings");
+  }
+  return false;
+}
+
+export function canManagePayments(session: SessionUser | null, salonId: string) {
+  if (canManageSalon(session, salonId)) return true;
+  return Boolean(session?.role === "staff" && session.salonId === salonId && session.permissions?.includes("payments"));
+}
+
 export function sessionCookieOptions() {
   const isHttps = process.env.NODE_ENV === "production" || process.env.SECURE_COOKIES === "true";
   return {
@@ -84,9 +111,8 @@ export function sessionCookieOptions() {
     sameSite: "lax" as const,
     secure: isHttps,
     path: "/",
-    maxAge: 60 * 60 * 24 * 30, // 30 days (1 month persistent session)
+    maxAge: 60 * 60 * 24 * 30,
   };
 }
 
-/** @deprecated use sessionCookieOptions */
 export const adminCookieOptions = sessionCookieOptions;

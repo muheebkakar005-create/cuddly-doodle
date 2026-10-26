@@ -1,8 +1,13 @@
 import crypto from "crypto";
+import { isPaymentSandboxMode } from "@/lib/appUrl";
 import { PaymentInitInput, PaymentInitOutput, PaymentVerifyResult } from "./types";
 
 /**
- * JazzCash Official Merchant Payment Gateway Adapter
+ * JazzCash hosted checkout (Customer Portal / merchantform).
+ * Hashing follows JazzCash Merchant Integration Guide:
+ * sort non-empty pp_* fields (except pp_SecureHash) by name, join values with &,
+ * prepend Integrity Salt, then HMAC-SHA256 with the salt as key.
+ * @see https://sandbox.jazzcash.com.pk/SandboxDocumentation/features.html
  */
 export class JazzCashAdapter {
   private merchantId: string;
@@ -16,7 +21,7 @@ export class JazzCashAdapter {
     this.password = process.env.JAZZCASH_PASSWORD || "";
     this.integritySalt = process.env.JAZZCASH_INTEGRITY_SALT || "";
     this.returnUrl = process.env.JAZZCASH_RETURN_URL || "";
-    this.isSandbox = (process.env.JAZZCASH_ENV || "sandbox").toLowerCase() !== "live";
+    this.isSandbox = isPaymentSandboxMode();
   }
 
   public isConfigured(): boolean {
@@ -29,32 +34,24 @@ export class JazzCashAdapter {
       : "https://payments.jazzcash.com.pk/CustomerPortal/transactionmanagement/merchantform/";
   }
 
-  /**
-   * Generates official JazzCash HMAC-SHA256 Secure Hash
-   * 1. Sort all fields alphabetically by field name
-   * 2. Filter out empty fields and pp_SecureHash
-   * 3. Join values with &
-   * 4. Compute HMAC-SHA256 using integritySalt
-   */
   public generateSecureHash(params: Record<string, string>): string {
     const sortedKeys = Object.keys(params)
       .filter((k) => k !== "pp_SecureHash" && params[k] !== undefined && params[k] !== null && params[k] !== "")
       .sort();
-
-    // Standard JazzCash HMAC-SHA256 string format
-    const hashString = sortedKeys.map((k) => params[k]).join("&");
-    return crypto.createHmac("sha256", this.integritySalt).update(hashString).digest("hex").toUpperCase();
+    const message = [this.integritySalt, ...sortedKeys.map((k) => params[k])].join("&");
+    return crypto.createHmac("sha256", this.integritySalt).update(message, "utf8").digest("hex");
   }
 
-  /**
-   * Initializes a 50% advance checkout session for JazzCash
-   */
   public initiatePayment(input: PaymentInitInput): PaymentInitOutput {
     const callbackUrl =
       this.returnUrl || `${input.baseUrl.replace(/\/$/, "")}/api/payments/callback/jazzcash`;
 
-    // If live/sandbox merchant credentials are not set, route to transparent sandbox simulator
     if (!this.isConfigured()) {
+      if (!this.isSandbox) {
+        throw new Error(
+          "JazzCash merchant credentials are not configured. Online JazzCash checkout cannot run in production until Merchant ID, Password, and Integrity Salt are set."
+        );
+      }
       return {
         success: true,
         internalRef: input.internalRef,
@@ -68,12 +65,8 @@ export class JazzCashAdapter {
     }
 
     const now = new Date();
-    const expiry = new Date(now.getTime() + 60 * 60 * 1000); // 1 hour expiry
-
-    const formatDateTime = (d: Date) =>
-      d.toISOString().replace(/[-:T]/g, "").slice(0, 14);
-
-    // JazzCash pp_TxnRefNo max length is 20 chars
+    const expiry = new Date(now.getTime() + 60 * 60 * 1000);
+    const formatDateTime = (d: Date) => d.toISOString().replace(/[-:T]/g, "").slice(0, 14);
     const sanitizedTxnRef = input.internalRef.replace(/[^a-zA-Z0-9]/g, "").slice(0, 20);
 
     const formFields: Record<string, string> = {
@@ -81,16 +74,13 @@ export class JazzCashAdapter {
       pp_TxnType: "MPAY",
       pp_Language: "EN",
       pp_MerchantID: this.merchantId,
-      pp_SubMerchantID: "",
       pp_Password: this.password,
-      pp_BankID: "TBANK",
-      pp_ProductID: "RETD",
       pp_TxnRefNo: sanitizedTxnRef,
-      pp_Amount: String(input.advancePaisa), // In integer Paisa (e.g. 100000 for PKR 1,000)
+      pp_Amount: String(input.advancePaisa),
       pp_TxnCurrency: "PKR",
       pp_TxnDateTime: formatDateTime(now),
       pp_BillReference: input.appointmentId.slice(0, 20),
-      pp_Description: "QSalon 50% Advance Online Booking",
+      pp_Description: "QSalons 50pct advance booking",
       pp_TxnExpiryDateTime: formatDateTime(expiry),
       pp_ReturnURL: callbackUrl,
       pp_mpf_1: input.internalRef,
@@ -113,52 +103,32 @@ export class JazzCashAdapter {
     };
   }
 
-  /**
-   * Verifies JazzCash postback callback
-   */
   public verifyCallback(payload: Record<string, string>, expectedAdvancePaisa: number): PaymentVerifyResult {
     const responseCode = payload.pp_ResponseCode || "";
     const responseMessage = payload.pp_ResponseMessage || "Unknown response from JazzCash";
     const txnRefNo = payload.pp_TxnRefNo || "";
-    const internalRef = payload.pp_mpf_1 || payload.pp_BillReference || txnRefNo;
-    const incomingHash = (payload.pp_SecureHash || "").toUpperCase();
+    const internalRef = payload.pp_mpf_1 || "";
+    const incomingHash = (payload.pp_SecureHash || "").toLowerCase();
     const paidAmountPaisa = parseInt(payload.pp_Amount || "0", 10);
     const paidAmountPkr = Math.round(paidAmountPaisa / 100);
 
-    // 1. Signature Check if credentials configured
-    if (this.isConfigured() && incomingHash) {
-      const calculatedHash = this.generateSecureHash(payload);
-      if (incomingHash !== calculatedHash) {
-        return {
-          success: false,
-          internalRef,
-          provider: "JAZZCASH",
-          providerRef: txnRefNo,
-          amountPaidPkr: 0,
-          amountPaidPaisa: 0,
-          failureReason: "Security hash signature mismatch. Potential tampering detected.",
-          rawPayload: payload,
-        };
+    if (this.isConfigured()) {
+      if (!incomingHash) {
+        return fail(internalRef, txnRefNo, payload, "Missing JazzCash pp_SecureHash.");
       }
+      const calculatedHash = this.generateSecureHash(payload);
+      if (incomingHash !== calculatedHash.toLowerCase()) {
+        return fail(internalRef, txnRefNo, payload, "JazzCash security hash mismatch. Callback rejected.");
+      }
+    } else if (!this.isSandbox) {
+      return fail(internalRef, txnRefNo, payload, "JazzCash is not configured; live callbacks are rejected.");
     }
 
-    // 2. Response code check: '000' or '121' indicates success in JazzCash
     const isSuccessCode = responseCode === "000" || responseCode === "121";
-
     if (!isSuccessCode) {
-      return {
-        success: false,
-        internalRef,
-        provider: "JAZZCASH",
-        providerRef: txnRefNo,
-        amountPaidPkr: 0,
-        amountPaidPaisa: 0,
-        failureReason: responseMessage || `JazzCash payment failed with code: ${responseCode}`,
-        rawPayload: payload,
-      };
+      return fail(internalRef, txnRefNo, payload, responseMessage || `JazzCash declined with code ${responseCode}`);
     }
 
-    // 3. Amount integrity check: Must match the exact required 50% advance paisa
     if (paidAmountPaisa !== expectedAdvancePaisa) {
       return {
         success: false,
@@ -167,23 +137,13 @@ export class JazzCashAdapter {
         providerRef: txnRefNo,
         amountPaidPkr: paidAmountPkr,
         amountPaidPaisa: paidAmountPaisa,
-        failureReason: `Amount mismatch: Received ${paidAmountPaisa} Paisa, expected exactly ${expectedAdvancePaisa} Paisa (50% advance).`,
+        failureReason: `Amount mismatch: received ${paidAmountPaisa} paisa, expected ${expectedAdvancePaisa} paisa.`,
         rawPayload: payload,
       };
     }
 
-    // 4. Currency check
     if (payload.pp_TxnCurrency && payload.pp_TxnCurrency !== "PKR") {
-      return {
-        success: false,
-        internalRef,
-        provider: "JAZZCASH",
-        providerRef: txnRefNo,
-        amountPaidPkr: 0,
-        amountPaidPaisa: 0,
-        failureReason: `Invalid currency: ${payload.pp_TxnCurrency}. Expected PKR.`,
-        rawPayload: payload,
-      };
+      return fail(internalRef, txnRefNo, payload, `Invalid currency ${payload.pp_TxnCurrency}. Expected PKR.`);
     }
 
     return {
@@ -196,6 +156,24 @@ export class JazzCashAdapter {
       rawPayload: payload,
     };
   }
+}
+
+function fail(
+  internalRef: string,
+  providerRef: string,
+  payload: Record<string, string>,
+  failureReason: string
+): PaymentVerifyResult {
+  return {
+    success: false,
+    internalRef,
+    provider: "JAZZCASH",
+    providerRef,
+    amountPaidPkr: 0,
+    amountPaidPaisa: 0,
+    failureReason,
+    rawPayload: payload,
+  };
 }
 
 export const jazzCash = new JazzCashAdapter();

@@ -5,14 +5,15 @@ import React, { createContext, useContext, useEffect, useState, useCallback } fr
 export type AuthUser = {
   id: string;
   email: string;
-  role: "admin" | "owner";
+  role: "admin" | "owner" | "staff" | "customer";
   name: string;
+  phone?: string;
   salonId?: string;
 };
 
 type AuthContextType = {
   user: AuthUser | null;
-  role: "admin" | "owner" | null;
+  role: "admin" | "owner" | "staff" | "customer" | null;
   isAuthenticated: boolean;
   loading: boolean;
   login: (email: string, password: string) => Promise<{ ok: boolean; role?: string; redirect?: string; error?: string }>;
@@ -39,15 +40,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             id: data.user.userId || data.user.id,
             email: data.user.email,
             role: data.user.role,
-            name: data.user.name || (data.user.role === "admin" ? "Muheeb Kakar" : "Shop Owner"),
+            name: data.user.name || (data.user.role === "admin" ? "Muheeb Kakar" : data.user.role === "customer" ? "Customer" : "Shop Owner"),
+            phone: data.user.phone,
             salonId: data.user.salonId,
           };
           setUser(authUser);
           localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(authUser));
+          if (authUser.phone) {
+            localStorage.setItem("qsc_phone", authUser.phone);
+          }
           return;
         }
       }
-      // If server returned 401, clear client state
       setUser(null);
       localStorage.removeItem(LOCAL_STORAGE_KEY);
     } catch {
@@ -57,7 +61,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
-  // 2. Initial Session Load (Checks local cache first for instant 0ms hydration)
+  // 2. Initial Session Load (Checks local cache first for instant hydration)
   useEffect(() => {
     try {
       const cached = localStorage.getItem(LOCAL_STORAGE_KEY);
@@ -70,7 +74,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     } catch {
       // Ignore cache parse error
     }
-    // Verify with server in background
     refreshSession();
   }, [refreshSession]);
 
@@ -88,20 +91,30 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         return { ok: false, error: data?.error || "Invalid email or password." };
       }
 
-      const role = data.role as "admin" | "owner";
+      const role = data.role as "admin" | "owner" | "staff" | "customer";
       const authUser: AuthUser = {
         id: data.userId || "usr_" + Date.now(),
         email: data.email,
         role: role,
-        name: role === "admin" ? "Muheeb Kakar" : (data.name || "Shop Owner"),
+        name: data.name || (role === "admin" ? "Muheeb Kakar" : role === "customer" ? "Customer" : "Shop Owner"),
+        phone: data.phone,
         salonId: data.salonId,
       };
 
       setUser(authUser);
       localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(authUser));
+      if (authUser.phone) {
+        localStorage.setItem("qsc_phone", authUser.phone);
+      }
 
-      // Determine redirect URL
-      const redirectUrl = role === "admin" ? "/super-admin/dashboard" : "/shop-owner/dashboard";
+      const redirectUrl =
+        role === "admin"
+          ? "/super-admin/dashboard"
+          : role === "customer"
+            ? "/bookings"
+            : role === "staff"
+              ? "/owner/bookings"
+              : "/shop-owner/dashboard";
 
       return {
         ok: true,
@@ -123,7 +136,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     } finally {
       setUser(null);
       localStorage.removeItem(LOCAL_STORAGE_KEY);
-      // Hard navigation ensures clean browser cookie & cache wipe
       window.location.href = redirectTo;
     }
   };

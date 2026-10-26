@@ -31,6 +31,7 @@ export async function GET(req: Request) {
       appointmentTime: a.appointmentTime,
       durationMinutes: a.durationMinutes,
       status: a.status,
+      expiresAt: a.expiresAt,
     })),
   });
   return NextResponse.json({ slots, closed: slots.length === 0 });

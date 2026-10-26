@@ -2,15 +2,17 @@
 
 import Link from "next/link";
 import Image from "next/image";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { DISLIKE_TAGS, LIKE_TAGS } from "@/lib/constants";
 import { formatPkr, formatTime12 } from "@/lib/format";
 import { isValidPakistaniPhone } from "@/lib/phone";
 import { buildBookingMessage, whatsappChatUrl } from "@/lib/whatsapp";
 import { ChevronLeftIcon, WhatsAppIcon } from "@/components/Icons";
+import { useAuth } from "@/context/AuthContext";
 
 type Row = {
   id: string;
+  accessToken?: string;
   customerName: string;
   customerPhone: string;
   appointmentDate: string;
@@ -31,13 +33,15 @@ type Row = {
 };
 
 export default function BookingsPage() {
+  const { user } = useAuth();
   const [phone, setPhone] = useState("");
   const [rows, setRows] = useState<Row[]>([]);
   const [loading, setLoading] = useState(false);
   const [searched, setSearched] = useState(false);
   const [error, setError] = useState("");
+  const [cancellingId, setCancellingId] = useState<string | null>(null);
 
-  async function load(p: string) {
+  const load = useCallback(async (p: string) => {
     setLoading(true);
     setError("");
     try {
@@ -62,15 +66,47 @@ export default function BookingsPage() {
     } finally {
       setLoading(false);
     }
-  }
+  }, []);
 
   useEffect(() => {
+    if (user?.phone) {
+      setPhone(user.phone);
+      load(user.phone);
+      return;
+    }
     const saved = localStorage.getItem("qsc_phone");
     if (saved) {
       setPhone(saved);
       load(saved);
     }
-  }, []);
+  }, [user, load]);
+
+  async function handleCancel(row: Row) {
+    if (!window.confirm("Are you sure you want to cancel this appointment?")) {
+      return;
+    }
+    setCancellingId(row.id);
+    try {
+      const res = await fetch(`/api/appointments/${row.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          status: "CANCELLED",
+          token: row.accessToken,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        alert(data.error || "Could not cancel appointment.");
+      } else {
+        load(phone);
+      }
+    } catch {
+      alert("Failed to cancel appointment. Please contact support or try again.");
+    } finally {
+      setCancellingId(null);
+    }
+  }
 
   const totalSpent = rows
     .filter((r) => r.status !== "CANCELLED")
@@ -101,7 +137,7 @@ export default function BookingsPage() {
           <ChevronLeftIcon className="h-5 w-5" />
         </Link>
         <h1 className="text-sm sm:text-base font-bold text-white text-center">
-          My Appointments & Payments
+          My Appointments &amp; Payments
         </h1>
         <div className="w-9" />
       </div>
@@ -270,6 +306,16 @@ export default function BookingsPage() {
                     Time: {formatTime12(r.appointmentTime)}
                   </span>
                   <div className="flex items-center gap-2">
+                    {r.status !== "CANCELLED" && r.status !== "COMPLETED" && (
+                      <button
+                        type="button"
+                        disabled={cancellingId === r.id}
+                        onClick={() => handleCancel(r)}
+                        className="rounded-xl border border-rose-500/30 bg-rose-500/10 px-2.5 py-1.5 text-[11px] font-semibold text-rose-300 hover:bg-rose-500/20 transition-colors cursor-pointer disabled:opacity-50"
+                      >
+                        {cancellingId === r.id ? "…" : "Cancel"}
+                      </button>
+                    )}
                     <Link
                       href={`/bookings/confirmed?id=${r.id}`}
                       className="inline-flex items-center rounded-xl bg-white/10 px-3 py-1.5 text-[11px] font-bold text-white hover:bg-white/20 transition-colors"

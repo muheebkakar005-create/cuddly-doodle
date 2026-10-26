@@ -9,6 +9,7 @@ import { CheckIcon, WhatsAppIcon } from "@/components/Icons";
 
 type AppointmentData = {
   id: string;
+  accessToken?: string;
   customerName: string;
   customerPhone: string;
   appointmentDate: string;
@@ -44,6 +45,7 @@ function Inner() {
   const [retryMethod, setRetryMethod] = useState<"JAZZCASH" | "EASYPAISA">("JAZZCASH");
   const [retrying, setRetrying] = useState(false);
   const [retryError, setRetryError] = useState("");
+  const [cancelling, setCancelling] = useState(false);
 
   const loadAppointment = () => {
     if (!id) {
@@ -125,6 +127,32 @@ function Inner() {
     }
   }
 
+  async function handleCancelAppointment() {
+    if (!row) return;
+    if (!window.confirm("Are you sure you want to cancel this appointment?")) return;
+    setCancelling(true);
+    try {
+      const res = await fetch(`/api/appointments/${row.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          status: "CANCELLED",
+          token: row.accessToken,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        alert(data.error || "Could not cancel appointment.");
+      } else {
+        loadAppointment();
+      }
+    } catch {
+      alert("Error connecting to server. Please try again.");
+    } finally {
+      setCancelling(false);
+    }
+  }
+
   if (loading) {
     return (
       <div className="mx-auto max-w-lg rounded-3xl bg-[#16161D] p-8 text-center border border-white/10 text-white">
@@ -155,6 +183,7 @@ function Inner() {
   }
 
   const isPaid = row.paymentStatus === "PAID" || row.status === "CONFIRMED";
+  const isCancelled = row.status === "CANCELLED";
   const advanceAmount = row.advanceAmountPkr || Math.round(row.totalPricePkr / 2);
   const remainingAmount = row.remainingAmountPkr != null ? row.remainingAmountPkr : (row.totalPricePkr - advanceAmount);
   const latestPayment = row.payments && row.payments.length > 0 ? row.payments[0] : null;
@@ -182,11 +211,15 @@ function Inner() {
       <div className="rounded-3xl border border-white/10 bg-[#16161D] p-6 sm:p-8 shadow-2xl text-center text-white">
         {/* Status Icon */}
         <div className={`mx-auto flex h-16 w-16 items-center justify-center rounded-full border ${
-          isPaid
-            ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/30"
-            : "bg-amber-500/20 text-amber-400 border-amber-500/30"
+          isCancelled
+            ? "bg-rose-500/20 text-rose-400 border-rose-500/30"
+            : isPaid
+              ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/30"
+              : "bg-amber-500/20 text-amber-400 border-amber-500/30"
         }`}>
-          {isPaid ? (
+          {isCancelled ? (
+            <span className="text-2xl font-bold font-mono">✕</span>
+          ) : isPaid ? (
             <CheckIcon className="h-8 w-8" />
           ) : (
             <span className="text-2xl font-bold font-mono">⏳</span>
@@ -194,7 +227,11 @@ function Inner() {
         </div>
 
         <h1 className="mt-4 font-display text-2xl sm:text-3xl font-bold text-white">
-          {isPaid ? "Appointment Confirmed!" : "Advance Payment Required"}
+          {isCancelled
+            ? "Appointment Cancelled"
+            : isPaid
+              ? "Appointment Confirmed!"
+              : "Advance Payment Required"}
         </h1>
         <p className="mt-1 text-xs text-white/60">
           Booking ID: <span className="font-mono text-gold font-bold">{row.id.slice(0, 8)}</span>
@@ -206,7 +243,7 @@ function Inner() {
         </p>
 
         {/* Failed Banner if returned from canceled/failed payment */}
-        {(paymentQuery === "failed" || (!isPaid && row.paymentStatus === "FAILED")) && (
+        {(paymentQuery === "failed" || (!isPaid && !isCancelled && row.paymentStatus === "FAILED")) && (
           <div className="mt-4 rounded-2xl bg-rose-500/10 border border-rose-500/30 p-3.5 text-left text-xs text-rose-300">
             <p className="font-bold">Payment Was Not Completed</p>
             <p className="mt-0.5 text-white/80 text-[11px]">
@@ -216,7 +253,7 @@ function Inner() {
         )}
 
         {/* Advance Notice Banner for Pending Payment */}
-        {!isPaid && (
+        {!isPaid && !isCancelled && (
           <div className="mt-4 rounded-2xl bg-amber-500/10 border border-amber-500/30 p-4 text-left text-xs text-amber-200 space-y-3">
             <div>
               <p className="font-bold flex items-center gap-1.5 text-amber-300 text-sm">
@@ -290,7 +327,7 @@ function Inner() {
             <span className="font-semibold text-white">{row.customerName} ({row.customerPhone})</span>
           </div>
           <div className="flex justify-between border-b border-white/10 pb-2">
-            <span className="text-white/60">Date & Time:</span>
+            <span className="text-white/60">Date &amp; Time:</span>
             <span className="font-semibold text-gold">
               {row.appointmentDate} at {formatTime12(row.appointmentTime)}
             </span>
@@ -379,6 +416,19 @@ function Inner() {
               Back to Salon
             </Link>
           </div>
+
+          {!isCancelled && row.status !== "COMPLETED" && (
+            <div className="pt-2">
+              <button
+                type="button"
+                disabled={cancelling}
+                onClick={handleCancelAppointment}
+                className="w-full rounded-2xl border border-rose-500/20 bg-rose-500/10 py-2.5 text-xs font-semibold text-rose-300 hover:bg-rose-500/20 transition-colors cursor-pointer disabled:opacity-50"
+              >
+                {cancelling ? "Cancelling…" : "Cancel This Appointment"}
+              </button>
+            </div>
+          )}
         </div>
       </div>
     </div>

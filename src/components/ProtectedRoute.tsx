@@ -8,7 +8,7 @@ import { ShieldLockIcon } from "./Icons";
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
-  allowedRoles?: ("admin" | "owner")[];
+  allowedRoles?: ("admin" | "owner" | "staff" | "customer")[];
   redirectTo?: string;
 }
 
@@ -69,19 +69,18 @@ export function ProtectedRoute({
             Your account ({user?.email}) is authorized as a{" "}
             <span className="text-gold font-bold uppercase">{role}</span>, which does not have permission to view this section.
           </p>
-
-          <div className="mt-6 flex flex-wrap gap-2 justify-center">
-            <Link
-              href={role === "admin" ? "/super-admin/dashboard" : "/shop-owner/dashboard"}
-              className="rounded-xl bg-white px-4 py-2 text-xs font-bold text-black hover:bg-white/90 shadow-md transition-all"
-            >
-              Go to Your Dashboard →
-            </Link>
+          <div className="mt-6 flex gap-3">
             <Link
               href="/"
-              className="rounded-xl border border-white/10 bg-[#16161D] px-4 py-2 text-xs font-semibold text-white hover:bg-white/10 transition-all"
+              className="rounded-xl border border-white/10 bg-[#1C1C24] px-4 py-2 text-xs font-bold text-white hover:bg-white/10 transition-all"
             >
-              Marketplace
+              Go to Home
+            </Link>
+            <Link
+              href="/login"
+              className="rounded-xl bg-white px-4 py-2 text-xs font-bold text-black shadow-md hover:bg-white/90 transition-all"
+            >
+              Switch Account
             </Link>
           </div>
         </div>
@@ -89,6 +88,6 @@ export function ProtectedRoute({
     }
   }
 
-  // 5. Authorized! Render children seamlessly
+  // 5. Authenticated & authorized
   return <>{children}</>;
 }

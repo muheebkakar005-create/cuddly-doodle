@@ -18,6 +18,7 @@ model User {
   salonId         String?              @unique
   salon           Salon?               @relation(fields: [salonId], references: [id], onDelete: SetNull)
   paymentAccounts SalonPaymentAccount[]
+  staffProfile    Staff?
   createdAt       DateTime             @default(now())
 }
 
@@ -59,7 +60,7 @@ model Salon {
 model SalonPaymentAccount {
   id                 String                   @id @default(cuid())
   salonId            String                   @unique
-  ownerId            String
+  ownerId            String?
   provider           String                   // JAZZCASH, EASYPAISA, BANK
   accountHolderName  String
   accountNumber      String                   // Mobile wallet number or IBAN / Account Number
@@ -74,7 +75,7 @@ model SalonPaymentAccount {
   createdAt          DateTime                 @default(now())
   updatedAt          DateTime                 @updatedAt
   salon              Salon                    @relation(fields: [salonId], references: [id], onDelete: Cascade)
-  owner              User                     @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  owner              User?                    @relation(fields: [ownerId], references: [id], onDelete: SetNull)
   auditLogs          PaymentAccountAuditLog[]
 
   @@index([salonId])
@@ -134,12 +135,19 @@ model Service {
 }
 
 model Staff {
-  id        String @id @default(cuid())
-  salonId   String
-  name      String
-  specialty String
-  photoUrl  String @default("")
-  salon     Salon  @relation(fields: [salonId], references: [id], onDelete: Cascade)
+  id                 String  @id @default(cuid())
+  salonId            String
+  name               String
+  specialty          String
+  photoUrl           String  @default("")
+  loginEmail         String? @unique
+  passwordHash       String  @default("")
+  canManageBookings  Boolean @default(true)
+  canManageServices  Boolean @default(false)
+  canManagePayments  Boolean @default(false)
+  salon              Salon   @relation(fields: [salonId], references: [id], onDelete: Cascade)
+  userId             String? @unique
+  user               User?   @relation(fields: [userId], references: [id], onDelete: SetNull)
 
   @@index([salonId])
 }
@@ -162,6 +170,8 @@ model Appointment {
   status             String               @default("PENDING") // PENDING, CONFIRMED, COMPLETED, CANCELLED
   specialNotes       String               @default("")
   staffName          String               @default("Any Available")
+  accessToken        String               @unique @default(cuid())
+  reminderSentAt     DateTime?
   expiresAt          DateTime?
   createdAt          DateTime             @default(now())
   updatedAt          DateTime             @default(now()) @updatedAt
@@ -201,6 +211,7 @@ model Payment {
   rawRequestJson      String?     @default("{}")
   rawResponseJson     String?     @default("{}")
   failureReason       String?
+  handshakeReceivedAt DateTime?
   paidAt              DateTime?
   createdAt           DateTime    @default(now())
   updatedAt           DateTime    @default(now()) @updatedAt

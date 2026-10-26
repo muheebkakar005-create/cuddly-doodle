@@ -31,9 +31,15 @@ function LoginFormInner() {
 
     // Role-based automatic redirect:
     // Super Admin -> /super-admin/dashboard (or /admin)
-    // Shop Owner  -> /shop-owner/dashboard (or /owner or return url)
+    // Shop Owner  -> /shop-owner/dashboard (or /owner)
+    // Staff       -> /owner/bookings
+    // Customer    -> /bookings
     if (res.role === "admin") {
       window.location.href = from && from.startsWith("/admin") ? from : "/super-admin/dashboard";
+    } else if (res.role === "customer") {
+      window.location.href = from || "/bookings";
+    } else if (res.role === "staff") {
+      window.location.href = "/owner/bookings";
     } else {
       window.location.href = from || "/shop-owner/dashboard";
     }
@@ -64,11 +70,11 @@ function LoginFormInner() {
             Single Unified Portal Login
           </p>
           <p className="text-[11px] text-white/50 mt-0.5">
-            Automatic role detection for Super Admin &amp; Shop Owners
+            Automatic role detection for Customers, Shop Owners &amp; Super Admin
           </p>
         </div>
 
-        {/* Single Unified Form - No tabs, no role toggle! */}
+        {/* Single Unified Form */}
         <form onSubmit={handleSubmit} className="mt-6 space-y-4">
           <div>
             <label className="block text-[11px] font-bold uppercase tracking-wider text-white/70 mb-1.5">
@@ -79,7 +85,7 @@ function LoginFormInner() {
               required
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              placeholder="name@salons.pk"
+              placeholder="name@example.com"
               className="h-11 w-full rounded-xl border border-white/10 bg-[#1C1C24] px-3.5 text-xs text-white placeholder:text-white/40 outline-none focus:border-gold focus:ring-1 focus:ring-gold transition-all"
             />
           </div>
@@ -112,7 +118,7 @@ function LoginFormInner() {
             disabled={loading}
             className="h-11 w-full rounded-xl bg-white font-bold text-black text-xs shadow-md hover:bg-white/90 active:scale-[0.99] transition-all cursor-pointer disabled:opacity-60"
           >
-            {loading ? "Signing in…" : "Sign In to Dashboard"}
+            {loading ? "Signing in…" : "Sign In to Account"}
           </button>
         </form>
 
@@ -141,12 +147,21 @@ function LoginFormInner() {
           </div>
         </div>
 
-        {/* New Salon Registration link */}
-        <div className="mt-5 text-center text-xs text-white/60">
-          Want to list your salon?{" "}
-          <Link href="/owner/register" className="font-bold text-gold hover:underline">
-            Register your shop →
-          </Link>
+        {/* Account Registration Links */}
+        <div className="mt-6 pt-4 border-t border-white/10 space-y-2.5 text-center text-xs">
+          <div>
+            <span className="text-white/60">New customer? </span>
+            <Link href="/register" className="font-bold text-gold hover:underline">
+              Create Customer Account →
+            </Link>
+          </div>
+
+          <div>
+            <span className="text-white/40">Want to list your salon? </span>
+            <Link href="/owner/register" className="font-semibold text-white/70 hover:underline">
+              Register Shop &amp; Payout Account →
+            </Link>
+          </div>
         </div>
       </div>
     </div>

@@ -11,6 +11,7 @@ export type BookedSlot = {
   appointmentTime: string;
   durationMinutes: number;
   status: string;
+  expiresAt?: Date | string | null;
 };
 
 export function generateSlots(params: {
@@ -36,7 +37,12 @@ export function generateSlots(params: {
   const now = karachiNow();
   const nowMins = now.getHours() * 60 + now.getMinutes() + 30;
 
-  const active = params.booked.filter((b) => b.status !== "CANCELLED" && b.status !== "COMPLETED");
+  const nowMs = Date.now();
+  const active = params.booked.filter((b) => {
+    if (b.status === "CANCELLED" || b.status === "COMPLETED") return false;
+    if (b.status === "PENDING" && b.expiresAt && new Date(b.expiresAt).getTime() < nowMs) return false;
+    return true;
+  });
 
   const slots: { time: string; label: string; available: boolean; reason?: string }[] = [];
 

@@ -25,10 +25,12 @@ export function BottomNav() {
       ? "/super-admin/dashboard"
       : role === "owner"
       ? "/shop-owner/dashboard"
+      : role === "customer"
+      ? "/bookings"
       : "/login";
 
   const profileLabel =
-    role === "admin" ? "Admin" : role === "owner" ? "Portal" : "Sign in";
+    role === "admin" ? "Admin" : role === "owner" ? "Portal" : role === "customer" ? "Account" : "Sign in";
 
   const items = [
     { href: "/", label: "Home", icon: HomeIcon },

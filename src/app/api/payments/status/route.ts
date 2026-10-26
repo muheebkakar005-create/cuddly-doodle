@@ -8,6 +8,7 @@ export async function GET(req: Request) {
     const { searchParams } = new URL(req.url);
     const appointmentId = searchParams.get("appointmentId");
     const ref = searchParams.get("ref");
+    const token = searchParams.get("token");
 
     if (!appointmentId && !ref) {
       return NextResponse.json({ error: "appointmentId or ref is required" }, { status: 400 });
@@ -21,6 +22,9 @@ export async function GET(req: Request) {
         })
       );
       if (!payment) return NextResponse.json({ error: "Payment not found" }, { status: 404 });
+      if (token && token !== payment.appointment.accessToken) {
+        return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      }
       return NextResponse.json({
         payment: {
           id: payment.id,
@@ -38,6 +42,7 @@ export async function GET(req: Request) {
           id: payment.appointment.id,
           status: payment.appointment.status,
           paymentStatus: payment.appointment.paymentStatus,
+          accessToken: payment.appointment.accessToken,
         },
       });
     }
@@ -50,6 +55,9 @@ export async function GET(req: Request) {
         })
       );
       if (!appointment) return NextResponse.json({ error: "Appointment not found" }, { status: 404 });
+      if (token && token !== appointment.accessToken) {
+        return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      }
       const latestPayment = appointment.payments[0] || null;
       return NextResponse.json({
         appointment: {
@@ -63,7 +71,16 @@ export async function GET(req: Request) {
           paymentProvider: appointment.paymentProvider,
           paymentRef: appointment.paymentRef,
         },
-        latestPayment,
+        latestPayment: latestPayment
+          ? {
+              id: latestPayment.id,
+              internalRef: latestPayment.internalRef,
+              provider: latestPayment.provider,
+              status: latestPayment.status,
+              advanceRequiredPkr: latestPayment.advanceRequiredPkr,
+              amountPaidPkr: latestPayment.amountPaidPkr,
+            }
+          : null,
       });
     }
 
