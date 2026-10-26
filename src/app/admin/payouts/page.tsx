@@ -56,6 +56,8 @@ type SettlementLedgerItem = {
     verificationStatus: string;
   } | null;
   totalAdvanceCollectedPkr: number;
+  totalCommissionRetainedPkr: number;
+  totalSalonAllocationPkr: number;
   pendingSettlementPkr: number;
   settledPkr: number;
   unsettledPaymentsCount: number;
@@ -81,12 +83,14 @@ type PayoutItem = {
 };
 
 export default function AdminPayoutsPage() {
-  const [activeTab, setActiveTab] = useState<"ACCOUNTS" | "SETTLEMENTS" | "HISTORY">("ACCOUNTS");
+  const [activeTab, setActiveTab] = useState<"ACCOUNTS" | "SETTLEMENTS" | "HISTORY">("SETTLEMENTS");
   const [accounts, setAccounts] = useState<AccountItem[]>([]);
   const [ledger, setLedger] = useState<SettlementLedgerItem[]>([]);
   const [payouts, setPayouts] = useState<PayoutItem[]>([]);
   const [totals, setTotals] = useState({
     totalCollectedPkr: 0,
+    totalCommissionRetainedPkr: 0,
+    totalSalonAllocationPkr: 0,
     totalPendingSettlementPkr: 0,
     totalSettledPkr: 0,
   });
@@ -198,10 +202,10 @@ export default function AdminPayoutsPage() {
         <div>
           <h1 className="text-xl sm:text-2xl font-bold text-white flex items-center gap-2">
             <WalletIcon className="h-6 w-6 text-gold" />
-            <span>Salon Owner Payment Accounts & Settlements</span>
+            <span>Salon Owner Payment Accounts &amp; Settlements</span>
           </h1>
           <p className="text-xs text-white/50 mt-0.5">
-            Verify salon owner payout destinations, manage centralized disbursements, and track advance balances.
+            Manage centralized disbursements (90% salon allocation) after deducting the mandatory 10% QSalon platform commission.
           </p>
         </div>
 
@@ -214,38 +218,34 @@ export default function AdminPayoutsPage() {
       </div>
 
       {/* Platform Ledger Metrics */}
-      <div className="grid gap-3 sm:grid-cols-3">
-        <div className="rounded-2xl border border-white/10 bg-[#16161D] p-4 shadow-lg">
-          <p className="text-[10px] uppercase font-bold tracking-wider text-white/50">Total Customer Advances Collected</p>
-          <p className="text-2xl font-bold text-white mt-1">{formatPkr(totals.totalCollectedPkr)}</p>
-          <p className="text-[10px] text-white/40 mt-0.5">Held in centralized QSalon merchant gateway</p>
+      <div className="grid gap-3 sm:grid-cols-4">
+        <div className="rounded-2xl border border-white/10 bg-[#16161D] p-4 shadow-lg space-y-1">
+          <p className="text-[10px] uppercase font-bold tracking-wider text-white/50">Gross Advance Collected</p>
+          <p className="text-2xl font-bold text-white">{formatPkr(totals.totalCollectedPkr)}</p>
+          <p className="text-[10px] text-white/40">50% customer advance online payments</p>
         </div>
 
-        <div className="rounded-2xl border border-amber-500/20 bg-[#16161D] p-4 shadow-lg">
-          <p className="text-[10px] uppercase font-bold tracking-wider text-amber-400">Total Outstanding Settlements</p>
-          <p className="text-2xl font-bold text-amber-300 mt-1">{formatPkr(totals.totalPendingSettlementPkr)}</p>
-          <p className="text-[10px] text-white/40 mt-0.5">Unsettled salon funds awaiting disbursement</p>
+        <div className="rounded-2xl border border-gold/30 bg-[#16161D] p-4 shadow-lg space-y-1">
+          <p className="text-[10px] uppercase font-bold tracking-wider text-gold">QSalon 10% Commission</p>
+          <p className="text-2xl font-bold text-gold">{formatPkr(totals.totalCommissionRetainedPkr)}</p>
+          <p className="text-[10px] text-white/40">Retained automatically by platform</p>
         </div>
 
-        <div className="rounded-2xl border border-emerald-500/20 bg-[#16161D] p-4 shadow-lg">
-          <p className="text-[10px] uppercase font-bold tracking-wider text-emerald-400">Completed Payouts Disbursed</p>
-          <p className="text-2xl font-bold text-emerald-300 mt-1">{formatPkr(totals.totalSettledPkr)}</p>
-          <p className="text-[10px] text-white/40 mt-0.5">Transferred to verified salon bank/wallets</p>
+        <div className="rounded-2xl border border-amber-500/20 bg-[#16161D] p-4 shadow-lg space-y-1">
+          <p className="text-[10px] uppercase font-bold tracking-wider text-amber-400">Outstanding Salon Settlements</p>
+          <p className="text-2xl font-bold text-amber-300">{formatPkr(totals.totalPendingSettlementPkr)}</p>
+          <p className="text-[10px] text-white/40">Net 90% salon allocation awaiting transfer</p>
+        </div>
+
+        <div className="rounded-2xl border border-emerald-500/20 bg-[#16161D] p-4 shadow-lg space-y-1">
+          <p className="text-[10px] uppercase font-bold tracking-wider text-emerald-400">Disbursed to Salons</p>
+          <p className="text-2xl font-bold text-emerald-300">{formatPkr(totals.totalSettledPkr)}</p>
+          <p className="text-[10px] text-white/40">Completed payouts to verified accounts</p>
         </div>
       </div>
 
       {/* Tabs */}
       <div className="flex gap-2 border-b border-white/10 pb-2">
-        <button
-          onClick={() => setActiveTab("ACCOUNTS")}
-          className={`rounded-xl px-4 py-2 text-xs font-bold transition-all cursor-pointer ${
-            activeTab === "ACCOUNTS"
-              ? "bg-white text-black shadow-md"
-              : "text-white/70 hover:bg-white/10"
-          }`}
-        >
-          Payment Accounts Verification ({accounts.length})
-        </button>
         <button
           onClick={() => setActiveTab("SETTLEMENTS")}
           className={`rounded-xl px-4 py-2 text-xs font-bold transition-all cursor-pointer ${
@@ -255,6 +255,16 @@ export default function AdminPayoutsPage() {
           }`}
         >
           Salons Settlement Ledger ({ledger.length})
+        </button>
+        <button
+          onClick={() => setActiveTab("ACCOUNTS")}
+          className={`rounded-xl px-4 py-2 text-xs font-bold transition-all cursor-pointer ${
+            activeTab === "ACCOUNTS"
+              ? "bg-white text-black shadow-md"
+              : "text-white/70 hover:bg-white/10"
+          }`}
+        >
+          Payment Accounts Verification ({accounts.length})
         </button>
         <button
           onClick={() => setActiveTab("HISTORY")}
@@ -268,7 +278,107 @@ export default function AdminPayoutsPage() {
         </button>
       </div>
 
-      {/* Tab 1: Payment Accounts Verification */}
+      {/* Tab 1: Salons Settlement Ledger */}
+      {activeTab === "SETTLEMENTS" && (
+        <div className="rounded-3xl border border-white/10 bg-[#16161D] shadow-xl overflow-hidden">
+          <div className="p-4 border-b border-white/10 flex justify-between items-center">
+            <div>
+              <h2 className="text-sm font-bold text-white">Salons Settlement Balances &amp; Commission Breakdown</h2>
+              <p className="text-xs text-white/50">
+                Advances collected are split 10% (QSalon Platform Commission) and 90% (Salon Net Allocation).
+              </p>
+            </div>
+            <span className="text-xs font-bold text-gold">{ledger.length} active salons</span>
+          </div>
+
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-xs min-w-[850px]">
+              <thead className="bg-[#1C1C24] text-[10px] uppercase text-white/50 border-b border-white/10">
+                <tr>
+                  <th className="px-4 py-3">Salon &amp; Area</th>
+                  <th className="px-4 py-3">Verified Payout Destination</th>
+                  <th className="px-4 py-3">Gross Advance</th>
+                  <th className="px-4 py-3 text-gold">10% Platform Comm.</th>
+                  <th className="px-4 py-3 text-emerald-400">90% Salon Allocation</th>
+                  <th className="px-4 py-3 text-amber-300">Pending Payout</th>
+                  <th className="px-4 py-3 text-right">Disburse Payout</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-white/5">
+                {ledger.map((s) => {
+                  const isAccountVerified = s.paymentAccount?.verificationStatus === "VERIFIED";
+                  const hasPendingFunds = s.pendingSettlementPkr > 0;
+
+                  return (
+                    <tr key={s.salonId} className="hover:bg-white/5">
+                      <td className="px-4 py-3">
+                        <p className="font-bold text-white">{s.salonName}</p>
+                        <p className="text-[10px] text-white/50">{s.quettaArea} • {s.phone}</p>
+                      </td>
+
+                      <td className="px-4 py-3">
+                        {s.paymentAccount ? (
+                          <div>
+                            <p className="font-semibold text-white">
+                              {s.paymentAccount.provider}: {s.paymentAccount.accountHolderName}
+                            </p>
+                            <p className="font-mono text-[10px] text-white/50">{s.paymentAccount.accountNumber}</p>
+                            {isAccountVerified ? (
+                              <span className="text-[9px] text-emerald-400 font-bold">✓ VERIFIED</span>
+                            ) : (
+                              <span className="text-[9px] text-amber-400 font-bold">⏳ {s.paymentAccount.verificationStatus}</span>
+                            )}
+                          </div>
+                        ) : (
+                          <span className="text-rose-400 text-[11px] font-semibold">No payout account</span>
+                        )}
+                      </td>
+
+                      <td className="px-4 py-3 font-semibold text-white">
+                        {formatPkr(s.totalAdvanceCollectedPkr)}
+                      </td>
+
+                      <td className="px-4 py-3 font-semibold text-gold">
+                        {formatPkr(s.totalCommissionRetainedPkr)}
+                      </td>
+
+                      <td className="px-4 py-3 font-semibold text-emerald-400">
+                        {formatPkr(s.totalSalonAllocationPkr)}
+                      </td>
+
+                      <td className="px-4 py-3 font-bold text-amber-300 text-sm">
+                        {formatPkr(s.pendingSettlementPkr)}
+                        <span className="block text-[9px] text-white/40 font-normal">
+                          {s.unsettledPaymentsCount} bookings
+                        </span>
+                      </td>
+
+                      <td className="px-4 py-3 text-right">
+                        <button
+                          disabled={!isAccountVerified || !hasPendingFunds}
+                          onClick={() => {
+                            setSelectedSalon(s);
+                            setPayoutAmount(s.pendingSettlementPkr);
+                            setPayoutRef("");
+                            setPayoutNotes("");
+                            setPayoutError("");
+                            setPayoutSuccess("");
+                          }}
+                          className="rounded-xl bg-gold px-3.5 py-1.5 text-xs font-bold text-black shadow-sm hover:bg-gold-light transition-all disabled:opacity-30 cursor-pointer"
+                        >
+                          Record Payout
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* Tab 2: Payment Accounts Verification */}
       {activeTab === "ACCOUNTS" && (
         <div className="space-y-3">
           <div className="flex gap-2 max-w-xs">
@@ -279,7 +389,7 @@ export default function AdminPayoutsPage() {
             >
               <option value="">All Verification Statuses</option>
               <option value="PENDING">Pending Review</option>
-              <option value="VERIFIED">Verified & Active</option>
+              <option value="VERIFIED">Verified &amp; Active</option>
               <option value="REJECTED">Rejected</option>
               <option value="SUSPENDED">Suspended</option>
             </select>
@@ -327,7 +437,7 @@ export default function AdminPayoutsPage() {
                           onClick={() => updateAccountStatus(acc.id, "VERIFIED")}
                           className="rounded-xl bg-emerald-600 px-3.5 py-1.5 text-xs font-bold text-white shadow-sm hover:bg-emerald-500 transition-colors cursor-pointer"
                         >
-                          ✓ Approve & Verify
+                          ✓ Approve &amp; Verify
                         </button>
                       )}
 
@@ -354,7 +464,7 @@ export default function AdminPayoutsPage() {
                   {/* Financial Account Card */}
                   <div className="grid gap-2 sm:grid-cols-3 rounded-xl bg-[#1C1C24] border border-white/5 p-3 text-xs">
                     <div>
-                      <span className="text-white/50 block text-[10px]">Method & Holder:</span>
+                      <span className="text-white/50 block text-[10px]">Method &amp; Holder:</span>
                       <span className="font-bold text-gold">{acc.provider}</span> —{" "}
                       <span className="text-white font-medium">{acc.accountHolderName}</span>
                     </div>
@@ -416,101 +526,6 @@ export default function AdminPayoutsPage() {
         </div>
       )}
 
-      {/* Tab 2: Salons Settlement Ledger */}
-      {activeTab === "SETTLEMENTS" && (
-        <div className="rounded-3xl border border-white/10 bg-[#16161D] shadow-xl overflow-hidden">
-          <div className="p-4 border-b border-white/10 flex justify-between items-center">
-            <div>
-              <h2 className="text-sm font-bold text-white">Salons Settlement Balances</h2>
-              <p className="text-xs text-white/50">
-                Track how much customer advance funds are held for each salon and disburse payouts.
-              </p>
-            </div>
-            <span className="text-xs font-bold text-gold">{ledger.length} active salons</span>
-          </div>
-
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs min-w-[750px]">
-              <thead className="bg-[#1C1C24] text-[10px] uppercase text-white/50 border-b border-white/10">
-                <tr>
-                  <th className="px-4 py-3">Salon & Area</th>
-                  <th className="px-4 py-3">Verified Payout Account</th>
-                  <th className="px-4 py-3">Total Collected</th>
-                  <th className="px-4 py-3">Pending Settlement</th>
-                  <th className="px-4 py-3">Already Settled</th>
-                  <th className="px-4 py-3 text-right">Disburse Payout</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-white/5">
-                {ledger.map((s) => {
-                  const isAccountVerified = s.paymentAccount?.verificationStatus === "VERIFIED";
-                  const hasPendingFunds = s.pendingSettlementPkr > 0;
-
-                  return (
-                    <tr key={s.salonId} className="hover:bg-white/5">
-                      <td className="px-4 py-3">
-                        <p className="font-bold text-white">{s.salonName}</p>
-                        <p className="text-[10px] text-white/50">{s.quettaArea} • {s.phone}</p>
-                      </td>
-
-                      <td className="px-4 py-3">
-                        {s.paymentAccount ? (
-                          <div>
-                            <p className="font-semibold text-white">
-                              {s.paymentAccount.provider}: {s.paymentAccount.accountHolderName}
-                            </p>
-                            <p className="font-mono text-[10px] text-white/50">{s.paymentAccount.accountNumber}</p>
-                            {isAccountVerified ? (
-                              <span className="text-[9px] text-emerald-400 font-bold">✓ VERIFIED</span>
-                            ) : (
-                              <span className="text-[9px] text-amber-400 font-bold">⏳ {s.paymentAccount.verificationStatus}</span>
-                            )}
-                          </div>
-                        ) : (
-                          <span className="text-rose-400 text-[11px] font-semibold">No payout account</span>
-                        )}
-                      </td>
-
-                      <td className="px-4 py-3 font-bold text-white">
-                        {formatPkr(s.totalAdvanceCollectedPkr)}
-                      </td>
-
-                      <td className="px-4 py-3 font-bold text-amber-300 text-sm">
-                        {formatPkr(s.pendingSettlementPkr)}
-                        <span className="block text-[9px] text-white/40 font-normal">
-                          {s.unsettledPaymentsCount} bookings
-                        </span>
-                      </td>
-
-                      <td className="px-4 py-3 font-bold text-emerald-400">
-                        {formatPkr(s.settledPkr)}
-                      </td>
-
-                      <td className="px-4 py-3 text-right">
-                        <button
-                          disabled={!isAccountVerified || !hasPendingFunds}
-                          onClick={() => {
-                            setSelectedSalon(s);
-                            setPayoutAmount(s.pendingSettlementPkr);
-                            setPayoutRef("");
-                            setPayoutNotes("");
-                            setPayoutError("");
-                            setPayoutSuccess("");
-                          }}
-                          className="rounded-xl bg-gold px-3.5 py-1.5 text-xs font-bold text-black shadow-sm hover:bg-gold-light transition-all disabled:opacity-30 cursor-pointer"
-                        >
-                          Record Payout
-                        </button>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
-
       {/* Tab 3: Payout History */}
       {activeTab === "HISTORY" && (
         <div className="rounded-3xl border border-white/10 bg-[#16161D] shadow-xl overflow-hidden">
@@ -529,7 +544,7 @@ export default function AdminPayoutsPage() {
               <thead className="bg-[#1C1C24] text-[10px] uppercase text-white/50 border-b border-white/10">
                 <tr>
                   <th className="px-4 py-3">Disbursement Ref</th>
-                  <th className="px-4 py-3">Salon & Area</th>
+                  <th className="px-4 py-3">Salon &amp; Area</th>
                   <th className="px-4 py-3">Amount</th>
                   <th className="px-4 py-3">Destination Account</th>
                   <th className="px-4 py-3">Processed By</th>
@@ -592,7 +607,7 @@ export default function AdminPayoutsPage() {
             <div>
               <h2 className="text-base font-bold text-white">Record Settlement Payout</h2>
               <p className="text-xs text-white/50 mt-0.5">
-                Disburse advance funds collected for <strong>{selectedSalon.salonName}</strong>.
+                Disburse advance funds collected for <strong>{selectedSalon.salonName}</strong> (net of 10% platform commission).
               </p>
             </div>
 
@@ -607,9 +622,10 @@ export default function AdminPayoutsPage() {
               <p className="font-mono text-white/80">
                 Account Number: {selectedSalon.paymentAccount?.accountNumber}
               </p>
-              <p className="text-amber-300 font-bold pt-1">
-                Pending Settlement Balance: {formatPkr(selectedSalon.pendingSettlementPkr)}
-              </p>
+              <div className="pt-2 border-t border-white/10 flex justify-between items-center text-amber-300 font-bold">
+                <span>Pending Net Allocation:</span>
+                <span className="text-sm">{formatPkr(selectedSalon.pendingSettlementPkr)}</span>
+              </div>
             </div>
 
             <form onSubmit={handleRecordPayout} className="space-y-3">

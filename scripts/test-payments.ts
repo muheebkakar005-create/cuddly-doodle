@@ -1,13 +1,20 @@
 /**
- * Comprehensive Payment System Unit & Integration Test
+ * Comprehensive Payment & Platform Commission System Unit & Integration Test
  * Verifies:
  * 1. Integer Paisa arithmetic & 50% advance precision invariant
- * 2. JazzCash HMAC-SHA256 signature generation & tamper detection
- * 3. Easypaisa payment hash & status validation
- * 4. Boundary and odd number edge cases (e.g. 1999 PKR, 1 PKR, 5000 PKR)
+ * 2. Mandatory 10% Platform Commission on the 50% advance payment (1,000 basis points)
+ * 3. Salon 90% advance allocation + 50% counter payment split invariants
+ * 4. JazzCash HMAC-SHA256 signature generation & tamper detection
+ * 5. Easypaisa payment hash & status validation
+ * 6. Boundary and odd number edge cases (e.g. 1999 PKR, 2000 PKR, 3500 PKR)
  */
 
-import { calculateAdvancePayment, validateAdvancePayment } from "../src/lib/payments/calculation";
+import {
+  calculateAdvancePayment,
+  calculatePlatformCommission,
+  calculateFullFinancialSplit,
+  validateAdvancePayment,
+} from "../src/lib/payments/calculation";
 import { JazzCashAdapter } from "../src/lib/payments/jazzcash";
 import { EasypaisaAdapter } from "../src/lib/payments/easypaisa";
 
@@ -19,9 +26,9 @@ function assert(condition: boolean, message: string) {
 }
 
 function runTests() {
-  console.log("\n==========================================");
-  console.log("   QSalon 50% Advance Online Payment Tests");
-  console.log("==========================================\n");
+  console.log("\n=================================================================");
+  console.log("   QSalon 50% Advance & 10% Platform Commission Payment Tests");
+  console.log("=================================================================\n");
 
   // Test 1: Even PKR price calculation (PKR 2,000)
   {
@@ -40,7 +47,44 @@ function runTests() {
     );
   }
 
-  // Test 2: Odd PKR price calculation (PKR 1,999)
+  // Test 2: Mandatory 10% Platform Commission on 50% Advance (PKR 2,000 Service)
+  {
+    const calc = calculateAdvancePayment(2000);
+    const comm = calculatePlatformCommission(calc.advanceAmountPkr, 1000);
+
+    assert(comm.advanceAmountPkr === 1000, "Customer advance is PKR 1,000");
+    assert(comm.commissionRateBps === 1000, "Commission rate is 1,000 basis points (10%)");
+    assert(comm.commissionPercentage === 10, "Commission percentage is 10%");
+    assert(comm.commissionPkr === 100, "QSalon 10% commission is exactly PKR 100 (NOT PKR 200)");
+    assert(comm.commissionPaisa === 10000, "QSalon commission is exactly 10,000 paisa");
+    assert(comm.salonAllocationPkr === 900, "Salon allocation from advance is exactly PKR 900 (90%)");
+    assert(comm.salonAllocationPaisa === 90000, "Salon allocation is exactly 90,000 paisa");
+    assert(
+      comm.commissionPaisa + comm.salonAllocationPaisa === comm.advanceAmountPaisa,
+      "Commission paisa + Salon allocation paisa === Total advance paisa (10,000 + 90,000 === 100,000)"
+    );
+    assert(
+      comm.commissionPkr + comm.salonAllocationPkr === comm.advanceAmountPkr,
+      "Commission PKR + Salon allocation PKR === Total advance PKR (100 + 900 === 1000)"
+    );
+  }
+
+  // Test 3: Full Financial Split Helper
+  {
+    const split = calculateFullFinancialSplit(2000);
+    assert(split.totalPricePkr === 2000, "Full split total service is PKR 2,000");
+    assert(split.advanceAmountPkr === 1000, "Full split 50% advance is PKR 1,000");
+    assert(split.commissionPkr === 100, "Full split 10% commission is PKR 100");
+    assert(split.salonAllocationFromAdvancePkr === 900, "Full split salon share of advance is PKR 900");
+    assert(split.remainingAmountPkr === 1000, "Full split remaining at counter is PKR 1,000");
+    assert(split.totalSalonEarningsPkr === 1900, "Total salon earnings is PKR 1,900 (900 + 1000)");
+    assert(
+      split.commissionPkr + split.totalSalonEarningsPkr === split.totalPricePkr,
+      "Platform commission (100) + Total salon earnings (1900) === Total service price (2000)"
+    );
+  }
+
+  // Test 4: Odd PKR price calculation and commission (PKR 1,999)
   {
     const calc = calculateAdvancePayment(1999);
     assert(calc.totalPricePkr === 1999, "PKR 1,999 total price matches");
@@ -53,12 +97,37 @@ function runTests() {
       calc.advanceAmountPkr + calc.remainingAmountPkr === 1999,
       "PKR sum invariant holds: 1000 + 999 === 1999"
     );
+
+    const comm = calculatePlatformCommission(calc.advanceAmountPkr, 1000);
+    assert(comm.commissionPkr === 100, "Odd price advance (PKR 1,000) produces PKR 100 commission");
+    assert(comm.salonAllocationPkr === 900, "Odd price produces PKR 900 salon allocation");
+    assert(
+      comm.commissionPkr + comm.salonAllocationPkr === calc.advanceAmountPkr,
+      "Odd price PKR invariant holds"
+    );
   }
 
-  // Test 3: Validation of paid advance amounts
+  // Test 5: Custom Booking Amount (PKR 3,500)
+  {
+    const split = calculateFullFinancialSplit(3500);
+    // Advance = 1750 PKR
+    // Commission = 175 PKR (10% of 1750)
+    // Salon advance share = 1575 PKR (90% of 1750)
+    // Counter due = 1750 PKR
+    assert(split.advanceAmountPkr === 1750, "PKR 3,500 service produces PKR 1,750 advance");
+    assert(split.commissionPkr === 175, "PKR 1,750 advance produces PKR 175 QSalon commission");
+    assert(split.salonAllocationFromAdvancePkr === 1575, "PKR 1,750 advance produces PKR 1,575 salon share");
+    assert(split.remainingAmountPkr === 1750, "PKR 3,500 service leaves PKR 1,750 counter balance");
+    assert(split.totalSalonEarningsPkr === 3325, "Total salon earnings is PKR 3,325 (1575 + 1750)");
+    assert(
+      split.commissionPkr + split.totalSalonEarningsPkr === 3500,
+      "175 (commission) + 3325 (salon earnings) === 3500 (total service)"
+    );
+  }
+
+  // Test 6: Validation of paid advance amounts
   {
     const total = 3000;
-    // Expected advance is 1500 PKR = 150,000 paisa
     const valid = validateAdvancePayment(total, 150000);
     assert(valid.valid === true, "Exact 50% advance (150,000 paisa) is recognized as valid");
 
@@ -69,7 +138,7 @@ function runTests() {
     assert(overpaid.valid === false, "Mismatched advance (200,000 paisa) is rejected");
   }
 
-  // Test 4: JazzCash Adapter & HMAC-SHA256 Signature Verification
+  // Test 7: JazzCash Adapter & HMAC-SHA256 Signature Verification
   {
     process.env.JAZZCASH_MERCHANT_ID = "TEST_MERCHANT_ID";
     process.env.JAZZCASH_PASSWORD = "TEST_PASSWORD";
@@ -97,37 +166,40 @@ function runTests() {
     assert(output.formFields?.pp_TxnCurrency === "PKR", "Currency is PKR");
     assert(typeof output.formFields?.pp_SecureHash === "string" && output.formFields.pp_SecureHash.length === 64, "Generated 64-char HMAC-SHA256 hash");
 
-    // Test Callback verification with successful code "000" and matching hash
-    const callbackPayload: Record<string, string> = {
-      ...(output.formFields || {}),
+    const sampleFields: Record<string, string> = {
       pp_ResponseCode: "000",
       pp_ResponseMessage: "Approved",
+      pp_Amount: "100000",
+      pp_TxnCurrency: "PKR",
+      pp_TxnRefNo: "TXN12345678",
+      pp_RetreivalReferenceNo: "RRN998877",
+      pp_mpf_1: "PAY-JC-TEST-001",
     };
-    // Re-sign callback payload
-    callbackPayload.pp_SecureHash = jc.generateSecureHash(callbackPayload);
 
-    const verifyResult = jc.verifyCallback(callbackPayload, 100000);
-    assert(verifyResult.success === true, "JazzCash callback verified successfully");
-    assert(verifyResult.amountPaidPaisa === 100000, "Paid amount in paisa verified");
-    assert(verifyResult.amountPaidPkr === 1000, "Paid amount in PKR verified");
+    const validHash = jc.generateSecureHash(sampleFields);
+    sampleFields.pp_SecureHash = validHash;
 
-    // Tamper test: Alter amount without valid hash
-    const tamperedPayload = { ...callbackPayload, pp_Amount: "50000" };
-    const tamperedResult = jc.verifyCallback(tamperedPayload, 100000);
-    assert(tamperedResult.success === false, "Tampered payment rejected due to signature mismatch");
+    const verification = jc.verifyCallback(sampleFields, 100000);
+    assert(verification.success === true, "JazzCash callback verified successfully");
+    assert(verification.amountPaidPaisa === 100000, "Paid amount in paisa verified");
+    assert(verification.amountPaidPkr === 1000, "Paid amount in PKR verified");
+
+    const tampered = { ...sampleFields, pp_Amount: "50000" };
+    const tamperedVerification = jc.verifyCallback(tampered, 100000);
+    assert(tamperedVerification.success === false, "Tampered payment rejected due to signature mismatch");
   }
 
-  // Test 5: Easypaisa Adapter & Callback Verification
+  // Test 8: Easypaisa Adapter
   {
-    process.env.EASYPAISA_STORE_ID = "9988";
-    process.env.EASYPAISA_HASH_KEY = "test_hash_key_easypaisa";
+    process.env.EASYPAISA_STORE_ID = "STORE_12345";
+    process.env.EASYPAISA_HASH_KEY = "EASYPAISA_SECRET_KEY_123";
     process.env.EASYPAISA_ENV = "sandbox";
 
     const ep = new EasypaisaAdapter();
     assert(ep.isConfigured() === true, "Easypaisa configured with credentials");
 
     const output = ep.initiatePayment({
-      appointmentId: "appt-ep-test-01",
+      appointmentId: "appt-ep-test-99",
       provider: "EASYPAISA",
       customerName: "Muheeb Kakar",
       internalRef: "PAY-EP-TEST-001",
@@ -143,34 +215,29 @@ function runTests() {
     assert(output.formFields?.amount === "2000.0", "Easypaisa amount formatted correctly");
     assert(typeof output.formFields?.merchantHashedReq === "string", "Easypaisa hash generated");
 
-    // Test callback verification: success code "0000" and matching 2000 PKR
-    const callbackEP = {
-      orderRefNum: "PAY-EP-TEST-001",
-      transactionId: "EP-TXN-776655",
-      amount: "2000.0",
+    const callbackPayload = {
       responseCode: "0000",
-      responseDesc: "Approved",
+      responseDesc: "SUCCESS",
+      orderRefNum: "PAY-EP-TEST-001",
+      transactionId: "EP_TXN_887766",
+      amount: "2000.0",
     };
 
-    const epVerify = ep.verifyCallback(callbackEP, 2000);
-    assert(epVerify.success === true, "Easypaisa approved transaction verified");
-    assert(epVerify.amountPaidPkr === 2000, "Easypaisa verified 2000 PKR");
-    assert(epVerify.amountPaidPaisa === 200000, "Easypaisa verified 200,000 paisa");
+    const verify = ep.verifyCallback(callbackPayload, 2000);
+    assert(verify.success === true, "Easypaisa approved transaction verified");
+    assert(verify.amountPaidPkr === 2000, "Easypaisa verified 2000 PKR");
+    assert(verify.amountPaidPaisa === 200000, "Easypaisa verified 200,000 paisa");
 
-    // Underpayment attempt: customer tries to pass only 1000 PKR
-    const underpaidEP = { ...callbackEP, amount: "1000.0" };
-    const underpaidResult = ep.verifyCallback(underpaidEP, 2000);
-    assert(underpaidResult.success === false, "Easypaisa underpayment rejected");
+    const underpaidVerify = ep.verifyCallback({ ...callbackPayload, amount: "1000.0" }, 2000);
+    assert(underpaidVerify.success === false, "Easypaisa underpayment rejected");
 
-    // Failure code check
-    const failedEP = { ...callbackEP, responseCode: "0001", responseDesc: "Customer Account Locked" };
-    const failedResult = ep.verifyCallback(failedEP, 2000);
-    assert(failedResult.success === false, "Easypaisa declined response properly handled as failure");
+    const failedVerify = ep.verifyCallback({ ...callbackPayload, responseCode: "0001", responseDesc: "Failed" }, 2000);
+    assert(failedVerify.success === false, "Easypaisa declined response properly handled as failure");
   }
 
-  console.log("\n==========================================");
-  console.log("   ALL 50% ADVANCE PAYMENT TESTS PASSED!");
-  console.log("==========================================\n");
+  console.log("\n=================================================================");
+  console.log("   ALL 50% ADVANCE & 10% PLATFORM COMMISSION TESTS PASSED!   ");
+  console.log("=================================================================\n");
 }
 
 runTests();

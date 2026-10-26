@@ -34,8 +34,8 @@ async function processCallback(req: Request) {
     const payload = await readPayload(req);
     const result = await paymentService.handleCallback("JAZZCASH", payload);
     const path = result.success
-      ? `/bookings/confirmed?id=${result.appointmentId}&payment=success&ref=${encodeURIComponent(result.internalRef)}`
-      : `/bookings/confirmed?id=${result.appointmentId}&payment=failed&reason=${encodeURIComponent(result.error || "Payment verification failed")}`;
+      ? `/bookings/confirmed?id=${result.appointmentId || ""}&payment=success&ref=${encodeURIComponent(result.internalRef || "")}`
+      : `/bookings/confirmed?id=${result.appointmentId || ""}&payment=failed&reason=${encodeURIComponent(result.error || "Payment verification failed")}`;
     return NextResponse.redirect(`${baseUrl}${path}`, 303);
   } catch (error: unknown) {
     console.error("JazzCash callback processing error:", error);

@@ -1,5 +1,5 @@
 import { prisma, withRetry } from "@/lib/prisma";
-import { calculateAdvancePayment } from "./calculation";
+import { calculateAdvancePayment, calculatePlatformCommission } from "./calculation";
 import { jazzCash } from "./jazzcash";
 import { easypaisa } from "./easypaisa";
 import { PaymentInitOutput, PaymentProvider, PaymentVerifyResult } from "./types";
@@ -42,6 +42,9 @@ export class PaymentService {
     const totalPricePkr = recalculateTotal > 0 ? recalculateTotal : appointment.totalPricePkr;
     const { advanceAmountPkr, advanceAmountPaisa, remainingAmountPkr } = calculateAdvancePayment(totalPricePkr);
 
+    // Mandatory 10% platform commission calculation on 50% advance
+    const comm = calculatePlatformCommission(advanceAmountPkr, 1000);
+
     const timestamp = Date.now();
     const shortProvider = provider === "JAZZCASH" ? "JC" : "EP";
     const internalRef = `QSC${shortProvider}${timestamp}${appointment.id.slice(-6).toUpperCase()}`.slice(0, 48);
@@ -72,6 +75,11 @@ export class PaymentService {
           amountPaidPkr: 0,
           remainingBalancePkr: remainingAmountPkr,
           amountPaisa: advanceAmountPaisa,
+          commissionRateBps: 1000,
+          commissionPkr: comm.commissionPkr,
+          commissionPaisa: comm.commissionPaisa,
+          salonSharePkr: comm.salonAllocationPkr,
+          salonSharePaisa: comm.salonAllocationPaisa,
           status: "PENDING",
           settlementStatus: "PENDING_SETTLEMENT",
         },
@@ -98,53 +106,67 @@ export class PaymentService {
     const candidates = [
       payload.pp_mpf_1,
       payload.orderRefNum,
-      payload.orderRefNumber,
-      payload.ref,
-      payload.pp_TxnRefNo,
       payload.pp_BillReference,
+      payload.pp_TxnRefNo,
+      payload.transactionId,
     ].filter(Boolean);
 
-    for (const internalRef of candidates) {
-      const payment = await prisma.payment.findUnique({
-        where: { internalRef },
-        include: {
-          appointment: {
-            include: { salon: true, services: { include: { service: true } } },
+    for (const ref of candidates) {
+      const found = await withRetry(() =>
+        prisma.payment.findFirst({
+          where: {
+            OR: [{ internalRef: ref }, { providerRef: ref }, { appointmentId: ref }],
           },
-        },
-      });
-      if (payment) return payment;
+          include: {
+            appointment: {
+              include: { services: { include: { service: true } } },
+            },
+          },
+        })
+      );
+      if (found) return found;
     }
     return null;
   }
 
-  public async recordEasypaisaHandshake(authToken: string, orderHint?: string) {
-    if (orderHint) {
-      const found = await this.findPaymentByCallback({ orderRefNum: orderHint, ref: orderHint });
-      if (found && found.status === "PENDING") {
-        await prisma.payment.update({
-          where: { id: found.id },
-          data: {
-            handshakeReceivedAt: new Date(),
-            rawRequestJson: JSON.stringify({ auth_token: authToken, orderHint }),
-          },
-        });
-        return found;
+  public async recordEasypaisaHandshake(authToken: string, ref?: string) {
+    if (!ref && !authToken) return;
+    try {
+      const candidates: { internalRef?: string; providerRef?: string }[] = [];
+      if (ref) {
+        candidates.push({ internalRef: ref });
+        candidates.push({ providerRef: ref });
       }
+      if (candidates.length > 0) {
+        await withRetry(() =>
+          prisma.payment.updateMany({
+            where: {
+              OR: candidates,
+              status: "PENDING",
+            },
+            data: { handshakeReceivedAt: new Date() },
+          })
+        );
+      }
+    } catch {
+      // non-fatal
     }
-    return null;
+  }
+
+  public async recordHandshake(internalRef: string) {
+    return this.recordEasypaisaHandshake("", internalRef);
   }
 
   public async handleCallback(
     provider: PaymentProvider,
     payload: Record<string, string>
-  ): Promise<{ success: boolean; appointmentId: string; internalRef: string; error?: string }> {
+  ): Promise<{ success: boolean; appointmentId?: string; internalRef?: string; error?: string }> {
     const payment = await this.findPaymentByCallback(payload);
     if (!payment) {
-      throw new Error("Payment record not found for this callback.");
+      return { success: false, error: "Payment record not found for this callback." };
     }
 
-    if (payment.status === "PAID" && payment.appointment.status === "CONFIRMED") {
+    if (payment.status === "PAID") {
       return { success: true, appointmentId: payment.appointmentId, internalRef: payment.internalRef };
     }
 
@@ -195,6 +217,10 @@ export class PaymentService {
     }
 
     const now = new Date();
+    const actualAdvancePkr = payment.advanceRequiredPkr;
+    const comm = calculatePlatformCommission(actualAdvancePkr, 1000);
+
+    // Atomic check-and-set: only update if status is still PENDING to prevent race conditions & duplicate commissions
     const claimed = await withRetry(() =>
       prisma.payment.updateMany({
         where: { id: payment.id, status: "PENDING" },
@@ -202,8 +228,13 @@ export class PaymentService {
           status: "PAID",
           settlementStatus: "PENDING_SETTLEMENT",
           providerRef: verification.providerRef || `TXN_${Date.now()}`,
-          amountPaidPkr: payment.advanceRequiredPkr,
+          amountPaidPkr: actualAdvancePkr,
           remainingBalancePkr: payment.remainingBalancePkr,
+          commissionRateBps: 1000,
+          commissionPkr: comm.commissionPkr,
+          commissionPaisa: comm.commissionPaisa,
+          salonSharePkr: comm.salonAllocationPkr,
+          salonSharePaisa: comm.salonAllocationPaisa,
           rawResponseJson: JSON.stringify(payload),
           paidAt: now,
         },
@@ -214,6 +245,35 @@ export class PaymentService {
       return { success: true, appointmentId: payment.appointmentId, internalRef: payment.internalRef };
     }
 
+    // Record verified PlatformCommission ledger entry (idempotent unique constraint on paymentId)
+    await withRetry(() =>
+      prisma.platformCommission.upsert({
+        where: { paymentId: payment.id },
+        create: {
+          paymentId: payment.id,
+          appointmentId: payment.appointmentId,
+          salonId: payment.salonId,
+          advanceAmountPaisa: payment.amountPaisa,
+          advanceAmountPkr: actualAdvancePkr,
+          rateBps: 1000,
+          commissionPaisa: comm.commissionPaisa,
+          commissionPkr: comm.commissionPkr,
+          salonAllocationPaisa: comm.salonAllocationPaisa,
+          salonAllocationPkr: comm.salonAllocationPkr,
+          providerRef: verification.providerRef || payment.internalRef,
+          provider,
+          status: "EARNED",
+          settlementStatus: "RETAINED",
+        },
+        update: {
+          providerRef: verification.providerRef || payment.internalRef,
+          status: "EARNED",
+          settlementStatus: "RETAINED",
+        },
+      })
+    );
+
+    // Confirm appointment
     await withRetry(() =>
       prisma.appointment.update({
         where: { id: payment.appointmentId },
@@ -222,7 +282,7 @@ export class PaymentService {
           paymentStatus: "PAID",
           paymentProvider: provider,
           paymentRef: verification.providerRef || payment.internalRef,
-          paidAmountPkr: payment.advanceRequiredPkr,
+          paidAmountPkr: actualAdvancePkr,
           remainingAmountPkr: payment.remainingBalancePkr,
           expiresAt: null,
         },

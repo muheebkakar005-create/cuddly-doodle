@@ -59,8 +59,8 @@ async function processCallback(req: Request) {
 
     const result = await paymentService.handleCallback("EASYPAISA", payload);
     const path = result.success
-      ? `/bookings/confirmed?id=${result.appointmentId}&payment=success&ref=${encodeURIComponent(result.internalRef)}`
-      : `/bookings/confirmed?id=${result.appointmentId}&payment=failed&reason=${encodeURIComponent(result.error || "Payment verification failed")}`;
+      ? `/bookings/confirmed?id=${result.appointmentId || ""}&payment=success&ref=${encodeURIComponent(result.internalRef || "")}`
+      : `/bookings/confirmed?id=${result.appointmentId || ""}&payment=failed&reason=${encodeURIComponent(result.error || "Payment verification failed")}`;
     return NextResponse.redirect(`${baseUrl}${path}`, 303);
   } catch (error: unknown) {
     console.error("Easypaisa callback processing error:", error);

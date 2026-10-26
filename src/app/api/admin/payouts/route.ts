@@ -11,7 +11,7 @@ export async function GET() {
       return NextResponse.json({ error: "Unauthorized. Admin access required." }, { status: 401 });
     }
 
-    // 1. Fetch all salons with their payment accounts and payments
+    // 1. Fetch all salons with their payment accounts, payments, and payouts
     const salons = await withRetry(() =>
       prisma.salon.findMany({
         where: { approvalStatus: "APPROVED" },
@@ -22,6 +22,8 @@ export async function GET() {
             select: {
               id: true,
               amountPaidPkr: true,
+              commissionPkr: true,
+              salonSharePkr: true,
               settlementStatus: true,
               paidAt: true,
               provider: true,
@@ -36,16 +38,36 @@ export async function GET() {
       })
     );
 
-    // Compute settlement ledgers
+    // Compute settlement ledgers with 10% platform commission breakdown
     const settlementLedger = salons.map((salon) => {
       const paidList = salon.payments || [];
       const totalAdvanceCollectedPkr = paidList.reduce((acc, p) => acc + p.amountPaidPkr, 0);
+
+      // QSalon retains 10% platform commission on advance
+      const totalCommissionRetainedPkr = paidList.reduce((acc, p) => {
+        const comm = p.commissionPkr > 0 ? p.commissionPkr : Math.round(p.amountPaidPkr * 0.10);
+        return acc + comm;
+      }, 0);
+
+      // Salon Allocation = 90% of advance
+      const totalSalonAllocationPkr = paidList.reduce((acc, p) => {
+        const share = p.salonSharePkr > 0 ? p.salonSharePkr : (p.amountPaidPkr - Math.round(p.amountPaidPkr * 0.10));
+        return acc + share;
+      }, 0);
+
       const pendingSettlementPkr = paidList
         .filter((p) => p.settlementStatus === "PENDING_SETTLEMENT" || p.settlementStatus === "PROCESSING")
-        .reduce((acc, p) => acc + p.amountPaidPkr, 0);
+        .reduce((acc, p) => {
+          const share = p.salonSharePkr > 0 ? p.salonSharePkr : (p.amountPaidPkr - Math.round(p.amountPaidPkr * 0.10));
+          return acc + share;
+        }, 0);
+
       const settledPkr = paidList
         .filter((p) => p.settlementStatus === "SETTLED")
-        .reduce((acc, p) => acc + p.amountPaidPkr, 0);
+        .reduce((acc, p) => {
+          const share = p.salonSharePkr > 0 ? p.salonSharePkr : (p.amountPaidPkr - Math.round(p.amountPaidPkr * 0.10));
+          return acc + share;
+        }, 0);
 
       return {
         salonId: salon.id,
@@ -55,6 +77,8 @@ export async function GET() {
         phone: salon.phone,
         paymentAccount: salon.paymentAccount || null,
         totalAdvanceCollectedPkr,
+        totalCommissionRetainedPkr,
+        totalSalonAllocationPkr,
         pendingSettlementPkr,
         settledPkr,
         unsettledPaymentsCount: paidList.filter((p) => p.settlementStatus === "PENDING_SETTLEMENT").length,
@@ -77,6 +101,8 @@ export async function GET() {
 
     const platformTotals = {
       totalCollectedPkr: settlementLedger.reduce((sum, s) => sum + s.totalAdvanceCollectedPkr, 0),
+      totalCommissionRetainedPkr: settlementLedger.reduce((sum, s) => sum + s.totalCommissionRetainedPkr, 0),
+      totalSalonAllocationPkr: settlementLedger.reduce((sum, s) => sum + s.totalSalonAllocationPkr, 0),
       totalPendingSettlementPkr: settlementLedger.reduce((sum, s) => sum + s.pendingSettlementPkr, 0),
       totalSettledPkr: settlementLedger.reduce((sum, s) => sum + s.settledPkr, 0),
     };
@@ -140,11 +166,16 @@ export async function POST(req: Request) {
       );
     }
 
-    const unsettledSum = salon.payments.reduce((acc, p) => acc + p.amountPaidPkr, 0);
-    if (amountPkr > unsettledSum) {
+    // Unsettled salon balance is based on the 90% allocation (salonSharePkr)
+    const unsettledSalonShareSum = salon.payments.reduce((acc, p) => {
+      const share = p.salonSharePkr > 0 ? p.salonSharePkr : (p.amountPaidPkr - Math.round(p.amountPaidPkr * 0.10));
+      return acc + share;
+    }, 0);
+
+    if (amountPkr > unsettledSalonShareSum) {
       return NextResponse.json(
         {
-          error: `Payout amount (PKR ${amountPkr.toLocaleString()}) exceeds the salon's pending settlement balance (PKR ${unsettledSum.toLocaleString()}).`,
+          error: `Payout amount (PKR ${amountPkr.toLocaleString()}) exceeds the salon's pending net allocation (PKR ${unsettledSalonShareSum.toLocaleString()}). Platform commission (10%) is already deducted.`,
         },
         { status: 400 }
       );
@@ -157,7 +188,8 @@ export async function POST(req: Request) {
     for (const p of salon.payments) {
       if (remainingToSettle <= 0) break;
       paymentsToSettleIds.push(p.id);
-      remainingToSettle -= p.amountPaidPkr;
+      const share = p.salonSharePkr > 0 ? p.salonSharePkr : (p.amountPaidPkr - Math.round(p.amountPaidPkr * 0.10));
+      remainingToSettle -= share;
     }
 
     // 3. Atomically create Payout and update Payment records

@@ -4,6 +4,7 @@ import { useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
 import Link from "next/link";
 import { formatPkr } from "@/lib/format";
+import { calculateFullFinancialSplit } from "@/lib/payments/calculation";
 
 function SandboxCheckoutInner() {
   const params = useSearchParams();
@@ -71,6 +72,8 @@ function SandboxCheckoutInner() {
   const isJazzCash = provider === "JAZZCASH";
   const callbackUrl = isJazzCash ? "/api/payments/callback/jazzcash" : "/api/payments/callback/easypaisa";
 
+  const split = calculateFullFinancialSplit(payment.totalBookingPkr);
+
   return (
     <div className="mx-auto max-w-lg px-4 py-8 text-white space-y-6">
       {/* Provider Header Banner */}
@@ -94,7 +97,7 @@ function SandboxCheckoutInner() {
       </div>
 
       {/* Mandatory 50% Payment Rule Breakdown */}
-      <div className="rounded-3xl border border-white/15 bg-[#16161D] p-5 sm:p-6 space-y-4 shadow-xl">
+      <div className="rounded-3xl border border-white/15 bg-[#16161D] p-5 sm:p-6 space-y-3.5 shadow-xl">
         <div className="flex items-center justify-between pb-3 border-b border-white/10">
           <span className="text-xs text-white/70">Total Salon Service Price</span>
           <span className="text-sm font-bold text-white">{formatPkr(payment.totalBookingPkr)}</span>
@@ -106,6 +109,19 @@ function SandboxCheckoutInner() {
             <p className="text-[10px] text-white/60">Payable now via {isJazzCash ? "JazzCash" : "Easypaisa"}</p>
           </div>
           <span className="text-lg font-black text-gold">{formatPkr(payment.advanceRequiredPkr)}</span>
+        </div>
+
+        {/* Financial Split Breakdown */}
+        <div className="rounded-2xl bg-[#1C1C24] p-3 border border-white/5 space-y-1.5 text-xs">
+          <p className="text-[10px] font-bold uppercase tracking-wider text-white/40">Automated Financial Split</p>
+          <div className="flex justify-between text-white/70">
+            <span>• QSalon Platform Commission (10% of advance):</span>
+            <span className="font-bold text-gold">{formatPkr(split.commissionPkr)}</span>
+          </div>
+          <div className="flex justify-between text-white/70">
+            <span>• Salon Allocation (90% of advance):</span>
+            <span className="font-bold text-emerald-400">{formatPkr(split.salonAllocationFromAdvancePkr)}</span>
+          </div>
         </div>
 
         <div className="flex items-center justify-between pt-1 text-xs text-white/70">
@@ -159,33 +175,11 @@ function SandboxCheckoutInner() {
           </button>
         </form>
 
-        {/* 3. Security Tamper Test (Underpaid Amount) */}
-        <form method="POST" action={callbackUrl}>
-          <input type="hidden" name={isJazzCash ? "pp_mpf_1" : "orderRefNum"} value={payment.internalRef} />
-          <input type="hidden" name={isJazzCash ? "pp_TxnRefNo" : "transactionId"} value={`TXN_TAMPER_${Date.now()}`} />
-          <input
-            type="hidden"
-            name={isJazzCash ? "pp_Amount" : "amount"}
-            value={isJazzCash ? "10000" : "100.0"} // Tampered: only 100 PKR instead of full advance
-          />
-          <input type="hidden" name={isJazzCash ? "pp_ResponseCode" : "responseCode"} value={isJazzCash ? "000" : "0000"} />
-          <input type="hidden" name={isJazzCash ? "pp_ResponseMessage" : "responseDesc"} value="Approved with tampered low amount" />
-          <button
-            type="submit"
-            className="w-full rounded-2xl bg-amber-500/15 border border-amber-500/30 py-2.5 text-[11px] font-semibold text-amber-300 hover:bg-amber-500/25 transition-all cursor-pointer"
-          >
-            ⚠️ Test Security: Submit Underpaid Tampered Amount
-          </button>
-        </form>
-      </div>
-
-      <div className="text-center">
-        <Link
-          href={`/bookings/confirmed?id=${payment.internalRef.split("_").pop() || ""}`}
-          className="text-xs text-white/50 hover:text-white transition-colors"
-        >
-          Cancel and return to booking details
-        </Link>
+        <div className="pt-2 text-center">
+          <Link href="/bookings" className="text-xs text-white/50 hover:underline">
+            Cancel and Return to Bookings
+          </Link>
+        </div>
       </div>
     </div>
   );
@@ -193,7 +187,13 @@ function SandboxCheckoutInner() {
 
 export default function SandboxCheckoutPage() {
   return (
-    <Suspense fallback={<div className="p-8 text-center text-white/60">Loading sandbox checkout…</div>}>
+    <Suspense
+      fallback={
+        <div className="mx-auto max-w-md rounded-3xl bg-[#16161D] p-8 text-center text-white border border-white/10">
+          Loading checkout…
+        </div>
+      }
+    >
       <SandboxCheckoutInner />
     </Suspense>
   );

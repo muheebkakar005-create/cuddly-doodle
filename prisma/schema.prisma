@@ -51,6 +51,7 @@ model Salon {
   paymentAccount   SalonPaymentAccount?
   payouts          Payout[]
   payments         Payment[]
+  commissions      PlatformCommission[]
   services         Service[]
   staff            Staff[]
   appointments     Appointment[]
@@ -170,7 +171,7 @@ model Appointment {
   status             String               @default("PENDING") // PENDING, CONFIRMED, COMPLETED, CANCELLED
   specialNotes       String               @default("")
   staffName          String               @default("Any Available")
-  accessToken        String               @unique @default(cuid())
+  accessToken        String?              @unique @default(cuid())
   reminderSentAt     DateTime?
   expiresAt          DateTime?
   createdAt          DateTime             @default(now())
@@ -187,34 +188,41 @@ model Appointment {
 }
 
 model Payment {
-  id                  String      @id @default(cuid())
+  id                  String              @id @default(cuid())
   appointmentId       String
-  appointment         Appointment @relation(fields: [appointmentId], references: [id], onDelete: Cascade)
+  appointment         Appointment         @relation(fields: [appointmentId], references: [id], onDelete: Cascade)
   salonId             String
-  salon               Salon       @relation(fields: [salonId], references: [id], onDelete: Cascade)
+  salon               Salon               @relation(fields: [salonId], references: [id], onDelete: Cascade)
   customerName        String
   customerPhone       String
-  provider            String      // JAZZCASH, EASYPAISA
-  internalRef         String      @unique
+  provider            String              // JAZZCASH, EASYPAISA
+  internalRef         String              @unique
   providerRef         String?
   totalBookingPkr     Int
   advanceRequiredPkr  Int
-  amountPaidPkr       Int         @default(0)
-  remainingBalancePkr Int         @default(0)
+  amountPaidPkr       Int                 @default(0)
+  remainingBalancePkr Int                 @default(0)
   amountPaisa         Int
-  status              String      @default("PENDING") // PENDING, PAID, FAILED, CANCELLED
-  settlementStatus    String      @default("PENDING_SETTLEMENT") // PENDING_SETTLEMENT, PROCESSING, SETTLED, CANCELLED
+  // 10% Platform Commission breakdown (1,000 bps)
+  commissionRateBps   Int                 @default(1000)
+  commissionPkr       Int                 @default(0)
+  commissionPaisa     Int                 @default(0)
+  salonSharePkr       Int                 @default(0)
+  salonSharePaisa     Int                 @default(0)
+  status              String              @default("PENDING") // PENDING, PAID, FAILED, CANCELLED
+  settlementStatus    String              @default("PENDING_SETTLEMENT") // PENDING_SETTLEMENT, PROCESSING, SETTLED, CANCELLED
   settledAt           DateTime?
   payoutId            String?
-  payout              Payout?     @relation(fields: [payoutId], references: [id], onDelete: SetNull)
+  payout              Payout?             @relation(fields: [payoutId], references: [id], onDelete: SetNull)
+  commission          PlatformCommission?
   paymentMethod       String?
-  rawRequestJson      String?     @default("{}")
-  rawResponseJson     String?     @default("{}")
+  rawRequestJson      String?             @default("{}")
+  rawResponseJson     String?             @default("{}")
   failureReason       String?
   handshakeReceivedAt DateTime?
   paidAt              DateTime?
-  createdAt           DateTime    @default(now())
-  updatedAt           DateTime    @default(now()) @updatedAt
+  createdAt           DateTime            @default(now())
+  updatedAt           DateTime            @default(now()) @updatedAt
 
   @@index([appointmentId])
   @@index([salonId])
@@ -222,6 +230,46 @@ model Payment {
   @@index([providerRef])
   @@index([status])
   @@index([settlementStatus])
+}
+
+model PlatformCommission {
+  id                   String      @id @default(cuid())
+  paymentId            String      @unique
+  payment              Payment     @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+  appointmentId        String
+  salonId              String
+  salon                Salon       @relation(fields: [salonId], references: [id], onDelete: Cascade)
+  advanceAmountPaisa   Int
+  advanceAmountPkr     Int
+  rateBps              Int         @default(1000) // 10% = 1000 basis points
+  commissionPaisa      Int
+  commissionPkr        Int
+  salonAllocationPaisa Int
+  salonAllocationPkr   Int
+  providerRef          String?
+  provider             String      // JAZZCASH, EASYPAISA
+  status               String      @default("EARNED") // EARNED, REVERSED, REFUNDED
+  settlementStatus     String      @default("RETAINED") // RETAINED, SETTLED, ADJUSTED
+  settledAt            DateTime?
+  createdAt            DateTime    @default(now())
+  updatedAt            DateTime    @updatedAt
+
+  @@index([salonId])
+  @@index([status])
+  @@index([settlementStatus])
+  @@index([createdAt])
+}
+
+model PlatformPaymentConfig {
+  id                String   @id @default("platform-config")
+  accountHolderName String   @default("QSalon Platform Collection")
+  provider          String   @default("JAZZCASH") // JAZZCASH, EASYPAISA, BANK
+  accountNumber     String   @default("03000000000")
+  bankName          String?  @default("")
+  branchCode        String?  @default("")
+  businessName      String   @default("Devbase / QSalon")
+  updatedBy         String   @default("System")
+  updatedAt         DateTime @default(now()) @updatedAt
 }
 
 model AppointmentService {

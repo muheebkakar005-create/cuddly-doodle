@@ -41,17 +41,33 @@ export async function GET() {
       return NextResponse.json({ error: "Salon not found" }, { status: 404 });
     }
 
-    // Financial Ledger Calculations
+    // Financial Ledger Calculations with 10% Platform Commission
     const paidPayments = salon.payments || [];
     const totalAdvanceCollectedPkr = paidPayments.reduce((sum, p) => sum + p.amountPaidPkr, 0);
 
+    const totalPlatformCommissionPkr = paidPayments.reduce((sum, p) => {
+      const comm = p.commissionPkr > 0 ? p.commissionPkr : Math.round(p.amountPaidPkr * 0.10);
+      return sum + comm;
+    }, 0);
+
+    const totalNetSalonSharePkr = paidPayments.reduce((sum, p) => {
+      const share = p.salonSharePkr > 0 ? p.salonSharePkr : (p.amountPaidPkr - Math.round(p.amountPaidPkr * 0.10));
+      return sum + share;
+    }, 0);
+
     const pendingSettlementPkr = paidPayments
       .filter((p) => p.settlementStatus === "PENDING_SETTLEMENT" || p.settlementStatus === "PROCESSING")
-      .reduce((sum, p) => sum + p.amountPaidPkr, 0);
+      .reduce((sum, p) => {
+        const share = p.salonSharePkr > 0 ? p.salonSharePkr : (p.amountPaidPkr - Math.round(p.amountPaidPkr * 0.10));
+        return sum + share;
+      }, 0);
 
     const settledPkr = paidPayments
       .filter((p) => p.settlementStatus === "SETTLED")
-      .reduce((sum, p) => sum + p.amountPaidPkr, 0);
+      .reduce((sum, p) => {
+        const share = p.salonSharePkr > 0 ? p.salonSharePkr : (p.amountPaidPkr - Math.round(p.amountPaidPkr * 0.10));
+        return sum + share;
+      }, 0);
 
     return NextResponse.json({
       salonId: salon.id,
@@ -59,6 +75,8 @@ export async function GET() {
       paymentAccount: salon.paymentAccount || null,
       stats: {
         totalAdvanceCollectedPkr,
+        totalPlatformCommissionPkr,
+        totalNetSalonSharePkr,
         pendingSettlementPkr,
         settledPkr,
         totalPaymentsCount: paidPayments.length,
@@ -98,37 +116,43 @@ export async function POST(req: Request) {
 
     if (!accountHolderName || accountHolderName.length < 3) {
       return NextResponse.json(
-        { error: "Valid Account Holder Full Legal Name is required." },
+        { error: "Account holder name must be at least 3 characters." },
         { status: 400 }
       );
     }
 
-    if (!accountNumber || accountNumber.length < 8) {
+    if (!accountNumber || accountNumber.length < 9) {
       return NextResponse.json(
-        { error: "Valid Mobile Wallet Number or Bank IBAN/Account Number is required." },
+        { error: "Valid mobile wallet number (e.g. 03XXXXXXXXX) or IBAN / Account Number is required." },
         { status: 400 }
       );
     }
 
     if (provider === "BANK" && !bankName) {
       return NextResponse.json(
-        { error: "Bank Name is required for Bank Account/IBAN payouts." },
+        { error: "Bank name is required when selecting Bank Transfer." },
         { status: 400 }
       );
     }
 
-    // Check existing payment account
-    const existing = await withRetry(() =>
+    const existingAccount = await withRetry(() =>
       prisma.salonPaymentAccount.findUnique({
         where: { salonId: session.salonId },
       })
     );
 
-    let paymentAccount;
+    let account;
+    if (existingAccount) {
+      const isDetailsChanged =
+        existingAccount.provider !== provider ||
+        existingAccount.accountNumber !== accountNumber ||
+        existingAccount.accountHolderName !== accountHolderName ||
+        existingAccount.bankName !== (bankName || null) ||
+        existingAccount.cnic !== (cnic || null);
 
-    if (existing) {
-      // Re-verification rule: If payout details are edited, reset status to PENDING
-      paymentAccount = await withRetry(() =>
+      const nextStatus = isDetailsChanged ? "PENDING" : existingAccount.verificationStatus;
+
+      account = await withRetry(() =>
         prisma.$transaction(async (tx) => {
           const updated = await tx.salonPaymentAccount.update({
             where: { salonId: session.salonId },
@@ -138,29 +162,31 @@ export async function POST(req: Request) {
               accountNumber,
               bankName: provider === "BANK" ? bankName : null,
               branchCode: provider === "BANK" ? branchCode : null,
-              cnic: cnic || existing.cnic,
-              businessTitle: businessTitle || existing.businessTitle,
-              verificationStatus: "PENDING", // Requires Admin Re-Verification
-              rejectionReason: null,
+              cnic: cnic || null,
+              businessTitle: businessTitle || null,
+              verificationStatus: nextStatus,
+              rejectionReason: isDetailsChanged ? null : existingAccount.rejectionReason,
+              verifiedAt: isDetailsChanged ? null : existingAccount.verifiedAt,
+              verifiedBy: isDetailsChanged ? null : existingAccount.verifiedBy,
             },
           });
 
           await tx.paymentAccountAuditLog.create({
             data: {
               salonPaymentAccountId: updated.id,
-              action: "UPDATED",
+              action: isDetailsChanged ? "UPDATED" : "EDITED",
               changedBy: session.email,
               oldValuesJson: JSON.stringify({
-                provider: existing.provider,
-                accountHolderName: existing.accountHolderName,
-                accountNumber: existing.accountNumber.replace(/.(?=.{4})/g, "*"),
-                bankName: existing.bankName,
+                provider: existingAccount.provider,
+                accountNumber: existingAccount.accountNumber,
+                accountHolderName: existingAccount.accountHolderName,
+                verificationStatus: existingAccount.verificationStatus,
               }),
               newValuesJson: JSON.stringify({
                 provider,
+                accountNumber,
                 accountHolderName,
-                accountNumber: accountNumber.replace(/.(?=.{4})/g, "*"),
-                bankName,
+                verificationStatus: nextStatus,
               }),
               ipAddress,
             },
@@ -170,7 +196,7 @@ export async function POST(req: Request) {
         })
       );
     } else {
-      paymentAccount = await withRetry(() =>
+      account = await withRetry(() =>
         prisma.$transaction(async (tx) => {
           const created = await tx.salonPaymentAccount.create({
             data: {
@@ -181,8 +207,8 @@ export async function POST(req: Request) {
               accountNumber,
               bankName: provider === "BANK" ? bankName : null,
               branchCode: provider === "BANK" ? branchCode : null,
-              cnic,
-              businessTitle,
+              cnic: cnic || null,
+              businessTitle: businessTitle || null,
               verificationStatus: "PENDING",
             },
           });
@@ -194,9 +220,9 @@ export async function POST(req: Request) {
               changedBy: session.email,
               newValuesJson: JSON.stringify({
                 provider,
+                accountNumber,
                 accountHolderName,
-                accountNumber: accountNumber.replace(/.(?=.{4})/g, "*"),
-                bankName,
+                verificationStatus: "PENDING",
               }),
               ipAddress,
             },
@@ -209,12 +235,13 @@ export async function POST(req: Request) {
 
     return NextResponse.json({
       success: true,
-      paymentAccount,
+      paymentAccount: account,
       message:
-        "Payment details submitted successfully. Status is now PENDING verification by QSalon administrators.",
+        "Payment settings saved successfully. New or updated accounts are submitted for Super-Admin review and verification.",
     });
-  } catch (error) {
+  } catch (error: unknown) {
     console.error("POST /api/owner/payment-account error:", error);
-    return NextResponse.json({ error: "Failed to save payment settings" }, { status: 500 });
+    const message = error instanceof Error ? error.message : "Failed to update payment account";
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }

@@ -6,10 +6,11 @@ import { CalendarIcon, HomeIcon, ScissorsIcon, ShieldLockIcon, WalletIcon } from
 
 const links = [
   { href: "/admin", label: "Dashboard", icon: HomeIcon },
+  { href: "/admin/commission", label: "Commission (10%)", icon: WalletIcon },
+  { href: "/admin/payouts", label: "Payouts & Accounts", icon: WalletIcon },
   { href: "/admin/salons", label: "Salons", icon: ScissorsIcon },
   { href: "/admin/appointments", label: "Bookings", icon: CalendarIcon },
   { href: "/admin/approvals", label: "Approvals", icon: ShieldLockIcon },
-  { href: "/admin/payouts", label: "Payouts & Accounts", icon: WalletIcon },
 ];
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
@@ -85,50 +86,45 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         <div className="min-w-0">{children}</div>
       </div>
 
-      {/* Floating Glassmorphic Bottom Dock for Mobile (Matching reference mockup pill dock) */}
+      {/* Floating Glassmorphic Bottom Dock for Mobile */}
       <div className="fixed bottom-4 inset-x-0 z-50 flex justify-center px-4 pointer-events-none lg:hidden">
-        <nav className="pointer-events-auto flex items-center justify-around gap-2 rounded-full bg-[#12141A]/95 backdrop-blur-2xl border border-white/10 px-4 py-2 shadow-2xl shadow-black/90 max-w-sm w-full">
-          {links.map((l) => {
+        <nav className="pointer-events-auto flex items-center justify-around gap-1 rounded-full bg-[#12141A]/95 backdrop-blur-2xl border border-white/10 px-3 py-2 shadow-2xl shadow-black/90 max-w-sm w-full">
+          {links.slice(0, 4).map((l) => {
             const Icon = l.icon;
             const active = pathname === l.href;
             return (
               <Link
                 key={l.href}
                 href={l.href}
-                className={`relative flex flex-col items-center gap-0.5 px-3 py-1.5 rounded-full transition-all ${
+                className={`relative flex flex-col items-center gap-0.5 px-2 py-1.5 rounded-full transition-all ${
                   active
                     ? "text-[#F5B82E] font-bold scale-105"
                     : "text-zinc-400 hover:text-white"
                 }`}
               >
-                <Icon className={`h-5 w-5 ${active ? "text-[#F5B82E]" : "text-zinc-400"}`} />
-                <span className="text-[9px] tracking-tight">{l.label}</span>
-                {active && (
-                  <span className="h-1 w-4 rounded-full bg-[#F5B82E] mt-0.5" />
-                )}
+                <Icon className={`h-4 w-4 ${active ? "text-[#F5B82E]" : "text-zinc-400"}`} />
+                <span className="text-[8px] tracking-tight">{l.label.replace(" (10%)", "").replace(" & Accounts", "")}</span>
               </Link>
             );
           })}
 
-          {/* Quick link back to Marketplace / User Portal */}
           <Link
             href="/"
             className="flex flex-col items-center gap-0.5 px-2 py-1.5 text-zinc-400 hover:text-white transition-all"
             title="Customer View"
           >
-            <span className="text-base leading-none">🌐</span>
-            <span className="text-[9px] tracking-tight">Market</span>
+            <span className="text-sm leading-none">🌐</span>
+            <span className="text-[8px] tracking-tight">Market</span>
           </Link>
 
-          {/* Mobile Sign Out button */}
           <button
             type="button"
             onClick={handleLogout}
             className="flex flex-col items-center gap-0.5 px-2 py-1.5 text-rose-400 hover:text-rose-300 transition-all cursor-pointer"
             title="Sign Out"
           >
-            <span className="text-base leading-none">🚪</span>
-            <span className="text-[9px] tracking-tight text-rose-400 font-bold">Logout</span>
+            <span className="text-sm leading-none">🚪</span>
+            <span className="text-[8px] tracking-tight text-rose-400 font-bold">Logout</span>
           </button>
         </nav>
       </div>
