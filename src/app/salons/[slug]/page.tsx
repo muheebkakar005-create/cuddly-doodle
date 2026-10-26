@@ -146,7 +146,7 @@ export default async function SalonPage({ params }: { params: Promise<{ slug: st
   };
 
   return (
-    <div className="space-y-4 max-w-3xl mx-auto pb-24 px-1">
+    <div className="space-y-5 max-w-3xl lg:max-w-5xl xl:max-w-6xl mx-auto pb-24 px-1 sm:px-4">
       {/* Structured Data */}
       <script
         type="application/ld+json"
@@ -166,15 +166,15 @@ export default async function SalonPage({ params }: { params: Promise<{ slug: st
         >
           <ChevronLeftIcon className="h-4 w-4" />
         </Link>
-        <h1 className="text-sm sm:text-base font-bold text-white text-center">
+        <h1 className="text-sm sm:text-base lg:text-lg font-bold text-white text-center">
           Book Appointment
         </h1>
         <div className="w-9" />
       </div>
 
       {/* Salon Mini Profile Card */}
-      <section className="rounded-2xl border border-white/10 bg-[#16161D] p-3.5 sm:p-4 shadow-lg space-y-3">
-        <div className="relative h-40 sm:h-52 w-full overflow-hidden rounded-xl border border-white/10">
+      <section className="rounded-2xl lg:rounded-3xl border border-white/10 bg-[#16161D] p-3.5 sm:p-5 lg:p-6 shadow-lg space-y-3 lg:space-y-4">
+        <div className="relative h-40 sm:h-52 lg:h-72 xl:h-80 w-full overflow-hidden rounded-xl lg:rounded-2xl border border-white/10">
           <Image
             src={images[0]}
             alt={`${salon.name} – ${CATEGORY_LABELS[salon.category]} in ${salon.quettaArea}, Quetta`}

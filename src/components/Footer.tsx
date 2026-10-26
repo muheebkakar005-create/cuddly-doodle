@@ -22,7 +22,7 @@ export function Footer() {
   return (
     <footer className="border-t border-white/10 bg-[#0C0C0E] text-white">
       {/* Main Footer Content */}
-      <div className="mx-auto max-w-6xl px-4 py-10 sm:py-14">
+      <div className="mx-auto max-w-6xl lg:max-w-7xl xl:max-w-[1536px] 2xl:max-w-[1780px] px-4 sm:px-6 lg:px-8 xl:px-12 py-10 sm:py-16">
         <div className="grid grid-cols-1 gap-8 sm:grid-cols-2 lg:grid-cols-5">
           {/* Column 1: Brand Info & Guarantee */}
           <div className="lg:col-span-2 space-y-4">

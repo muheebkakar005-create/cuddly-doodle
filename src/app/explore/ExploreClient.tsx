@@ -267,7 +267,7 @@ export function ExploreClient({ salons }: Props) {
       )}
 
       {/* Desktop Layout */}
-      <div className="grid gap-6 lg:grid-cols-[290px_1fr]">
+      <div className="grid gap-6 lg:grid-cols-[290px_1fr] xl:grid-cols-[320px_1fr]">
         <aside className="hidden h-fit rounded-3xl border border-white/10 bg-[#16161D] p-5 shadow-xl lg:block lg:sticky lg:top-24">
           {filterContent}
         </aside>
@@ -308,7 +308,7 @@ export function ExploreClient({ salons }: Props) {
             </div>
           </div>
 
-          <div className="grid gap-5 sm:grid-cols-2">
+          <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-3">
             {filtered.map((s) => (
               <SalonCard key={s.slug} salon={s} />
             ))}

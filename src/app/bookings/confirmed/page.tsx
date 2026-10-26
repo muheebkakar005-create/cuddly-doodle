@@ -238,7 +238,7 @@ function Inner() {
   });
 
   return (
-    <div className="mx-auto max-w-lg space-y-6 pb-16">
+    <div className="mx-auto max-w-lg lg:max-w-2xl space-y-6 pb-16">
       <div className="rounded-3xl border border-white/10 bg-[#16161D] p-6 sm:p-8 shadow-2xl text-center text-white">
         {/* Status Icon */}
         <div className={`mx-auto flex h-16 w-16 items-center justify-center rounded-full border ${

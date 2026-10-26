@@ -126,7 +126,7 @@ export default function BookingsPage() {
   }
 
   return (
-    <div className="mx-auto max-w-xl space-y-6 pb-20">
+    <div className="mx-auto max-w-xl lg:max-w-3xl xl:max-w-4xl space-y-6 pb-20">
       {/* Header with back button */}
       <div className="flex items-center justify-between">
         <Link

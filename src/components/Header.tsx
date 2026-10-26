@@ -90,7 +90,7 @@ export function Header() {
   return (
     <header className="sticky top-0 z-40 border-b border-white/10 bg-[#0C0C0E]/95 backdrop-blur-xl">
       {/* 1. Desktop & Tablet Header - Rich PC Navigation Menu */}
-      <div className="mx-auto hidden max-w-7xl items-center justify-between gap-4 px-4 py-3 md:flex">
+      <div className="mx-auto hidden max-w-7xl xl:max-w-[1536px] 2xl:max-w-[1780px] items-center justify-between gap-4 px-4 sm:px-6 lg:px-8 xl:px-12 py-3.5 md:flex">
         <Logo />
 
         {/* Desktop Nav Links */}
@@ -127,7 +127,7 @@ export function Header() {
         </nav>
 
         {/* Area Filter & Search Bar */}
-        <div className="flex flex-1 max-w-md items-center gap-2">
+        <div className="flex flex-1 max-w-md lg:max-w-lg xl:max-w-xl items-center gap-2">
           <select
             value={area}
             onChange={(e) => {
