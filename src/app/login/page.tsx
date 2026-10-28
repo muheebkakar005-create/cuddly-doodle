@@ -45,18 +45,6 @@ function LoginFormInner() {
     }
   }
 
-  function fillSuperAdmin() {
-    setEmail("muheebkakar005@gmail.com");
-    setPassword("");
-    setError("");
-  }
-
-  function fillShopOwner() {
-    setEmail("owner@thehairlab.pk");
-    setPassword("");
-    setError("");
-  }
-
   return (
     <div className="mx-auto max-w-md py-6 sm:py-12 px-2">
       <div className="rounded-3xl border border-white/10 bg-[#16161D] p-6 sm:p-8 text-white shadow-2xl backdrop-blur-xl">
@@ -121,31 +109,6 @@ function LoginFormInner() {
             {loading ? "Signing in…" : "Sign In to Account"}
           </button>
         </form>
-
-        {/* 1-Click Fast Autofill Testing Buttons */}
-        <div className="mt-6 pt-5 border-t border-white/10 space-y-2">
-          <p className="text-[10px] font-bold uppercase tracking-wider text-center text-white/40">
-            Quick 1-Click Demo Login:
-          </p>
-          <div className="grid grid-cols-2 gap-2">
-            <button
-              type="button"
-              onClick={fillSuperAdmin}
-              className="rounded-xl border border-white/10 bg-[#1C1C24] px-2.5 py-2 text-[11px] font-semibold text-white/90 hover:bg-white/10 hover:border-gold/40 transition-all text-left cursor-pointer"
-            >
-              <span className="block font-bold text-gold text-[10px]">👑 Super Admin</span>
-              <span className="text-[9px] text-white/50 truncate block">muheebkakar005</span>
-            </button>
-            <button
-              type="button"
-              onClick={fillShopOwner}
-              className="rounded-xl border border-white/10 bg-[#1C1C24] px-2.5 py-2 text-[11px] font-semibold text-white/90 hover:bg-white/10 hover:border-white/30 transition-all text-left cursor-pointer"
-            >
-              <span className="block font-bold text-white text-[10px]">💈 Shop Owner</span>
-              <span className="text-[9px] text-white/50 truncate block">The Hair Lab</span>
-            </button>
-          </div>
-        </div>
 
         {/* Account Registration Links */}
         <div className="mt-6 pt-4 border-t border-white/10 space-y-2.5 text-center text-xs">

@@ -11,18 +11,10 @@ interface AppQrModalProps {
 
 export function AppQrModal({ isOpen, onClose }: AppQrModalProps) {
   const [mounted, setMounted] = useState(false);
-  const [qrTab, setQrTab] = useState<"prod" | "local">("prod");
   const [copied, setCopied] = useState(false);
 
   useEffect(() => {
     setMounted(true);
-    if (typeof window !== "undefined") {
-      const isLocal =
-        window.location.hostname === "localhost" ||
-        window.location.hostname.startsWith("192.168.") ||
-        window.location.hostname.startsWith("127.0.0.");
-      setQrTab(isLocal ? "local" : "prod");
-    }
   }, []);
 
   useEffect(() => {
@@ -43,8 +35,7 @@ export function AppQrModal({ isOpen, onClose }: AppQrModalProps) {
 
   if (!isOpen || !mounted) return null;
 
-  const currentUrl =
-    qrTab === "prod" ? "https://qsalons.vercel.app/install" : "http://192.168.69.151:3000/install";
+  const currentUrl = "https://qsalons.vercel.app/install";
 
   function handleCopy() {
     navigator.clipboard?.writeText(currentUrl);
@@ -82,33 +73,11 @@ export function AppQrModal({ isOpen, onClose }: AppQrModalProps) {
           </button>
         </div>
 
-        {/* Toggle Tabs */}
-        <div className="flex rounded-xl bg-black/60 p-1 border border-white/10 text-xs">
-          <button
-            type="button"
-            onClick={() => setQrTab("prod")}
-            className={`flex-1 rounded-lg py-1.5 font-semibold transition-all cursor-pointer ${
-              qrTab === "prod" ? "bg-white text-black shadow-sm" : "text-white/60 hover:text-white"
-            }`}
-          >
-            🌐 Online (Vercel)
-          </button>
-          <button
-            type="button"
-            onClick={() => setQrTab("local")}
-            className={`flex-1 rounded-lg py-1.5 font-semibold transition-all cursor-pointer ${
-              qrTab === "local" ? "bg-white text-black shadow-sm" : "text-white/60 hover:text-white"
-            }`}
-          >
-            📶 Local Wi-Fi
-          </button>
-        </div>
-
         {/* QR Code Container */}
         <div className="flex flex-col items-center justify-center rounded-2xl bg-white p-4 shadow-inner">
           <div className="relative h-48 w-48 sm:h-52 sm:w-52">
             <Image
-              src={qrTab === "prod" ? "/qr-app-prod.png" : "/qr-app-local.png"}
+              src="/qr-app-prod.png"
               alt="Q_Salons App QR Code"
               fill
               className="rounded-lg object-contain"
