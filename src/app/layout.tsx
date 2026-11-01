@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { DM_Sans, Fraunces } from "next/font/google";
+import Script from "next/script";
 import { SiteShell } from "@/components/SiteShell";
 import { AuthProvider } from "@/context/AuthContext";
 import "./globals.css";
@@ -77,6 +78,25 @@ export const metadata: Metadata = {
     description: "Book verified salons across Quetta, Balochistan.",
     images: ["/logo-web.png"],
   },
+  // Explicitly remove noindex: instruct Google & Bing to index and follow all public pages
+  robots: {
+    index: true,
+    follow: true,
+    googleBot: {
+      index: true,
+      follow: true,
+      "max-video-preview": -1,
+      "max-image-preview": "large",
+      "max-snippet": -1,
+    },
+  },
+  // Google Search Console & Bing Webmaster Tools automated verification hooks
+  verification: {
+    google: process.env.NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION,
+    other: {
+      "msvalidate.01": process.env.NEXT_PUBLIC_BING_SITE_VERIFICATION || "",
+    },
+  },
   // NOTE: Do NOT set alternates.canonical here in the root layout.
   // Each individual page sets its own self-referencing canonical URL.
   // Setting it here would incorrectly canonicalize every page to the homepage.
@@ -124,6 +144,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     sameAs: [],
   };
 
+  const gaId = process.env.NEXT_PUBLIC_GA_ID;
+
   return (
     <html lang="en" className="dark bg-[#0C0C0E]">
       <head>
@@ -132,12 +154,40 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
         <meta name="apple-mobile-web-app-title" content="Q_Salons" />
         <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+        {/* Resource Preconnect for Instant Image Loading (Core Web Vitals & PageSpeed) */}
+        <link rel="preconnect" href="https://images.unsplash.com" />
+        <link rel="dns-prefetch" href="https://images.unsplash.com" />
+        <link rel="preconnect" href="https://res.cloudinary.com" />
+        <link rel="dns-prefetch" href="https://res.cloudinary.com" />
         <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(websiteJsonLd) }} />
         <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(orgJsonLd) }} />
       </head>
       <body
         className={`${dm.variable} ${display.variable} antialiased bg-[#0C0C0E] text-white min-h-screen selection:bg-[#E5C378]/30 selection:text-white`}
       >
+        {/* Google Analytics 4 (GA4) Tag - Activates automatically when NEXT_PUBLIC_GA_ID is set */}
+        {gaId && (
+          <>
+            <Script
+              strategy="afterInteractive"
+              src={`https://www.googletagmanager.com/gtag/js?id=${gaId}`}
+            />
+            <Script
+              id="google-analytics-init"
+              strategy="afterInteractive"
+              dangerouslySetInnerHTML={{
+                __html: `
+                  window.dataLayer = window.dataLayer || [];
+                  function gtag(){dataLayer.push(arguments);}
+                  gtag('js', new Date());
+                  gtag('config', '${gaId}', {
+                    page_path: window.location.pathname,
+                  });
+                `,
+              }}
+            />
+          </>
+        )}
         <AuthProvider>
           <SiteShell>{children}</SiteShell>
         </AuthProvider>

@@ -15,8 +15,17 @@ export const dynamic = "force-dynamic";
 const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://qsalons.vercel.app";
 
 export const metadata: Metadata = {
+  title: "Q_Salons | Book Best Salons, Barbers & Beauty Parlours in Quetta",
+  description:
+    "Quetta's premier online salon discovery & advance booking platform. Discover verified gents barbers, ladies beauty parlours, spas, and hammam across Quetta with instant WhatsApp confirmation.",
   alternates: {
     canonical: siteUrl,
+  },
+  openGraph: {
+    title: "Q_Salons | Best Salons & Barbers in Quetta",
+    description:
+      "Discover verified salons in Quetta. Compare real PKR pricing, view menus, and book appointments instantly.",
+    url: siteUrl,
   },
 };
 
