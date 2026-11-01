@@ -10,13 +10,22 @@ export const dynamic = "force-dynamic";
 type SalonWithServices = Prisma.SalonGetPayload<{ include: { services: true } }>;
 
 export const metadata: Metadata = {
-  title: "Explore Salons, Barbers & Beauty Parlours in Quetta",
-  description: "Find and book the best salons, barbers, and beauty parlours in Quetta. Filter by area (Jinnah Road, Model Town, Satellite Town), category, price, and rating.",
+  title: "Explore Top Salons in Quetta | Verified Quetta Salons – Q_Salons",
+  description: "Find and book top salons in Quetta. Filter verified barbers, beauty parlours, and spas across Jinnah Road, Model Town, and Satellite Town by price and rating.",
+  keywords: [
+    "Quetta salons",
+    "salons",
+    "salons in Quetta",
+    "top salon",
+    "top salon in Quetta",
+    "best salon in Quetta",
+    "salons near me",
+  ],
   alternates: {
     canonical: `${process.env.NEXT_PUBLIC_SITE_URL || "https://qsalons.vercel.app"}/explore`,
   },
   openGraph: {
-    title: "Explore Quetta Salons & Beauty Parlours | Q_Salons",
+    title: "Explore Quetta Salons & Top Salons | Q_Salons",
     description: "Filter 18+ verified salons, barbers & beauty parlours in Quetta by area, price & rating.",
     url: `${process.env.NEXT_PUBLIC_SITE_URL || "https://qsalons.vercel.app"}/explore`,
   },

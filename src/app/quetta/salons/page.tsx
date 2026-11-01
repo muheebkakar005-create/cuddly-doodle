@@ -10,14 +10,26 @@ const SITE_URL =
 export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
-  title: "Best Salons in Quetta 2025 | Book Online – Q_Salons",
+  title: "Top Salons in Quetta 2026 | Verified Quetta Salons – Q_Salons",
   description:
-    "Discover and book the best salons in Quetta. Browse verified gents barbers, ladies beauty parlours, spas, and hammam – all in one place on Q_Salons.",
+    "Discover and book the top salons in Quetta. Browse verified gents barbers, ladies beauty parlours, spas, and hammam – all in one place on Q_Salons.",
+  keywords: [
+    "Quetta salons",
+    "salons",
+    "salons in Quetta",
+    "top salon",
+    "top salon in Quetta",
+    "best salon in Quetta",
+    "top salons Quetta",
+    "best salons in Quetta",
+    "barbers in Quetta",
+    "beauty parlours in Quetta",
+  ],
   alternates: { canonical: `${SITE_URL}/quetta/salons` },
   openGraph: {
-    title: "Best Salons in Quetta 2025 | Book Online – Q_Salons",
+    title: "Top Salons in Quetta | Book Online – Q_Salons",
     description:
-      "Discover and book the best salons in Quetta. Browse verified gents barbers, ladies beauty parlours, spas, and hammam – all in one place on Q_Salons.",
+      "Discover and book the top salons in Quetta. Browse verified gents barbers, ladies beauty parlours, spas, and hammam on Q_Salons.",
     url: `${SITE_URL}/quetta/salons`,
     siteName: "Q_Salons",
     type: "website",
