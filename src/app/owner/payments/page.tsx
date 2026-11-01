@@ -72,6 +72,12 @@ export default function OwnerPaymentsPage() {
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<"SETTINGS" | "TRANSACTIONS" | "PAYOUTS">("SETTINGS");
 
+  // Admin Switcher State
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [allSalons, setAllSalons] = useState<{ id: string; name: string; quettaArea: string }[]>([]);
+  const [selectedSalonId, setSelectedSalonId] = useState("");
+  const [currentSalonName, setCurrentSalonName] = useState("");
+
   // Form State
   const [provider, setProvider] = useState<"JAZZCASH" | "EASYPAISA" | "BANK">("JAZZCASH");
   const [accountHolderName, setAccountHolderName] = useState("");
@@ -84,13 +90,21 @@ export default function OwnerPaymentsPage() {
   const [msg, setMsg] = useState("");
   const [error, setError] = useState("");
 
-  async function loadData() {
+  async function loadData(targetSalonId?: string) {
     setLoading(true);
+    setError("");
     try {
-      const res = await fetch("/api/owner/payment-account");
+      const activeId = targetSalonId !== undefined ? targetSalonId : selectedSalonId;
+      const url = activeId ? `/api/owner/payment-account?salonId=${activeId}` : `/api/owner/payment-account`;
+      const res = await fetch(url);
       const data = await res.json();
       if (res.ok) {
         setAccount(data.paymentAccount);
+        setIsAdmin(Boolean(data.isAdmin));
+        if (data.allSalons) setAllSalons(data.allSalons);
+        if (data.salonId) setSelectedSalonId(data.salonId);
+        if (data.salonName) setCurrentSalonName(data.salonName);
+
         if (data.paymentAccount) {
           setProvider(data.paymentAccount.provider);
           setAccountHolderName(data.paymentAccount.accountHolderName);
@@ -98,11 +112,21 @@ export default function OwnerPaymentsPage() {
           setBankName(data.paymentAccount.bankName || "");
           setBranchCode(data.paymentAccount.branchCode || "");
           setCnic(data.paymentAccount.cnic || "");
-          setBusinessTitle(data.paymentAccount.businessTitle || "");
+          setBusinessTitle(data.paymentAccount.businessTitle || data.salonName || "");
+        } else {
+          // Clear inputs if no account configured yet
+          setAccountHolderName("");
+          setAccountNumber("");
+          setBankName("");
+          setBranchCode("");
+          setCnic("");
+          setBusinessTitle(data.salonName || "");
         }
         setStats(data.stats || stats);
         setPayments(data.payments || []);
         setPayouts(data.payouts || []);
+      } else {
+        setError(data.error || "Failed to load payment account details.");
       }
     } catch {
       setError("Failed to load payment account details.");
@@ -127,6 +151,7 @@ export default function OwnerPaymentsPage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          salonId: selectedSalonId || undefined,
           provider,
           accountHolderName,
           accountNumber,
@@ -142,7 +167,7 @@ export default function OwnerPaymentsPage() {
         setError(data.error || "Failed to save payment settings.");
       } else {
         setMsg(data.message || "Payment details saved successfully.");
-        loadData();
+        loadData(selectedSalonId);
       }
     } catch {
       setError("Network error while saving settings.");
@@ -203,6 +228,43 @@ export default function OwnerPaymentsPage() {
 
         <div>{renderStatusBadge(account?.verificationStatus)}</div>
       </div>
+
+      {/* Super Admin Salon Selector Switcher */}
+      {isAdmin && allSalons.length > 0 && (
+        <div className="rounded-2xl border border-gold/40 bg-gradient-to-r from-[#1C1C24] to-[#16161D] p-3.5 flex flex-wrap items-center justify-between gap-3 shadow-xl">
+          <div className="flex items-center gap-2.5">
+            <span className="grid h-7 w-7 place-items-center rounded-lg bg-gold text-black font-black text-xs shadow-sm">
+              👑
+            </span>
+            <div>
+              <p className="text-xs font-bold text-white leading-tight">
+                Super Admin Payout Mode: <span className="text-gold">{currentSalonName || "Select Salon"}</span>
+              </p>
+              <p className="text-[10px] text-white/50">
+                You can configure and directly verify payout accounts for any registered Quetta salon.
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <label className="text-[11px] font-semibold text-white/70">Switch Shop:</label>
+            <select
+              value={selectedSalonId}
+              onChange={(e) => {
+                const newId = e.target.value;
+                setSelectedSalonId(newId);
+                loadData(newId);
+              }}
+              className="rounded-xl border border-white/20 bg-black/80 px-3 py-1.5 text-xs text-white outline-none focus:border-gold cursor-pointer"
+            >
+              {allSalons.map((s) => (
+                <option key={s.id} value={s.id} className="bg-[#16161D] text-white">
+                  {s.name} ({s.quettaArea})
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+      )}
 
       {/* Verification Notice Banner */}
       {!isVerified && (

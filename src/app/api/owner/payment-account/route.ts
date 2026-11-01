@@ -5,16 +5,61 @@ import { getClientIp } from "@/lib/rateLimit";
 
 export const dynamic = "force-dynamic";
 
-export async function GET() {
+async function resolveTargetSalonId(
+  session: { role: string; salonId?: string | null },
+  requestedSalonId?: string | null,
+  businessTitle?: string | null
+): Promise<string | null> {
+  if (session.salonId) return session.salonId;
+
+  if (session.role === "admin") {
+    if (requestedSalonId) return requestedSalonId;
+
+    if (businessTitle) {
+      const match = await withRetry(() =>
+        prisma.salon.findFirst({
+          where: {
+            OR: [
+              { name: { contains: businessTitle.trim(), mode: "insensitive" } },
+              { slug: { contains: businessTitle.trim().toLowerCase().replace(/\s+/g, "-") } },
+            ],
+          },
+        })
+      );
+      if (match) return match.id;
+    }
+
+    // Default to the first approved salon (e.g. The Hair Lab or The House of Beauty)
+    const firstSalon = await withRetry(() =>
+      prisma.salon.findFirst({
+        where: { approvalStatus: "APPROVED" },
+        orderBy: { createdAt: "asc" },
+      })
+    );
+    return firstSalon?.id || null;
+  }
+
+  return null;
+}
+
+export async function GET(req: Request) {
   try {
     const session = await getSession();
-    if (!session || session.role !== "owner" || !session.salonId) {
+    if (!session || (session.role !== "owner" && session.role !== "admin")) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const url = new URL(req.url);
+    const querySalonId = url.searchParams.get("salonId");
+    const targetSalonId = await resolveTargetSalonId(session, querySalonId);
+
+    if (!targetSalonId) {
+      return NextResponse.json({ error: "No salon found" }, { status: 404 });
     }
 
     const salon = await withRetry(() =>
       prisma.salon.findUnique({
-        where: { id: session.salonId },
+        where: { id: targetSalonId },
         include: {
           paymentAccount: {
             include: {
@@ -39,6 +84,18 @@ export async function GET() {
 
     if (!salon) {
       return NextResponse.json({ error: "Salon not found" }, { status: 404 });
+    }
+
+    // If Super Admin, also return list of all salons for dropdown switcher
+    let allSalons: { id: string; name: string; quettaArea: string }[] = [];
+    if (session.role === "admin") {
+      allSalons = await withRetry(() =>
+        prisma.salon.findMany({
+          where: { approvalStatus: "APPROVED" },
+          select: { id: true, name: true, quettaArea: true },
+          orderBy: { name: "asc" },
+        })
+      );
     }
 
     // Financial Ledger Calculations with 10% Platform Commission
@@ -73,6 +130,8 @@ export async function GET() {
       salonId: salon.id,
       salonName: salon.name,
       paymentAccount: salon.paymentAccount || null,
+      isAdmin: session.role === "admin",
+      allSalons,
       stats: {
         totalAdvanceCollectedPkr,
         totalPlatformCommissionPkr,
@@ -93,7 +152,7 @@ export async function GET() {
 export async function POST(req: Request) {
   try {
     const session = await getSession();
-    if (!session || session.role !== "owner" || !session.salonId) {
+    if (!session || (session.role !== "owner" && session.role !== "admin")) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
@@ -106,6 +165,11 @@ export async function POST(req: Request) {
     const cnic = String(body.cnic || "").trim();
     const businessTitle = String(body.businessTitle || "").trim();
     const ipAddress = getClientIp(req);
+
+    const targetSalonId = await resolveTargetSalonId(session, body.salonId, businessTitle);
+    if (!targetSalonId) {
+      return NextResponse.json({ error: "No salon found to link this payout account." }, { status: 400 });
+    }
 
     if (!["JAZZCASH", "EASYPAISA", "BANK"].includes(provider)) {
       return NextResponse.json(
@@ -137,9 +201,13 @@ export async function POST(req: Request) {
 
     const existingAccount = await withRetry(() =>
       prisma.salonPaymentAccount.findUnique({
-        where: { salonId: session.salonId },
+        where: { salonId: targetSalonId },
       })
     );
+
+    // If Super Admin is saving, auto-verify immediately so advance checkout is enabled
+    const isAdmin = session.role === "admin";
+    const autoVerifyStatus = isAdmin ? "VERIFIED" : "PENDING";
 
     let account;
     if (existingAccount) {
@@ -150,12 +218,16 @@ export async function POST(req: Request) {
         existingAccount.bankName !== (bankName || null) ||
         existingAccount.cnic !== (cnic || null);
 
-      const nextStatus = isDetailsChanged ? "PENDING" : existingAccount.verificationStatus;
+      const nextStatus = isAdmin
+        ? "VERIFIED"
+        : isDetailsChanged
+        ? "PENDING"
+        : existingAccount.verificationStatus;
 
       account = await withRetry(() =>
         prisma.$transaction(async (tx) => {
           const updated = await tx.salonPaymentAccount.update({
-            where: { salonId: session.salonId },
+            where: { salonId: targetSalonId },
             data: {
               provider,
               accountHolderName,
@@ -165,16 +237,16 @@ export async function POST(req: Request) {
               cnic: cnic || null,
               businessTitle: businessTitle || null,
               verificationStatus: nextStatus,
-              rejectionReason: isDetailsChanged ? null : existingAccount.rejectionReason,
-              verifiedAt: isDetailsChanged ? null : existingAccount.verifiedAt,
-              verifiedBy: isDetailsChanged ? null : existingAccount.verifiedBy,
+              rejectionReason: null,
+              verifiedAt: nextStatus === "VERIFIED" ? new Date() : (isDetailsChanged ? null : existingAccount.verifiedAt),
+              verifiedBy: nextStatus === "VERIFIED" ? session.email : (isDetailsChanged ? null : existingAccount.verifiedBy),
             },
           });
 
           await tx.paymentAccountAuditLog.create({
             data: {
               salonPaymentAccountId: updated.id,
-              action: isDetailsChanged ? "UPDATED" : "EDITED",
+              action: nextStatus === "VERIFIED" ? "VERIFIED" : (isDetailsChanged ? "UPDATED" : "EDITED"),
               changedBy: session.email,
               oldValuesJson: JSON.stringify({
                 provider: existingAccount.provider,
@@ -200,7 +272,7 @@ export async function POST(req: Request) {
         prisma.$transaction(async (tx) => {
           const created = await tx.salonPaymentAccount.create({
             data: {
-              salonId: session.salonId!,
+              salonId: targetSalonId,
               ownerId: session.userId,
               provider,
               accountHolderName,
@@ -209,20 +281,22 @@ export async function POST(req: Request) {
               branchCode: provider === "BANK" ? branchCode : null,
               cnic: cnic || null,
               businessTitle: businessTitle || null,
-              verificationStatus: "PENDING",
+              verificationStatus: autoVerifyStatus,
+              verifiedAt: autoVerifyStatus === "VERIFIED" ? new Date() : null,
+              verifiedBy: autoVerifyStatus === "VERIFIED" ? session.email : null,
             },
           });
 
           await tx.paymentAccountAuditLog.create({
             data: {
               salonPaymentAccountId: created.id,
-              action: "CREATED",
+              action: autoVerifyStatus === "VERIFIED" ? "VERIFIED" : "CREATED",
               changedBy: session.email,
               newValuesJson: JSON.stringify({
                 provider,
                 accountNumber,
                 accountHolderName,
-                verificationStatus: "PENDING",
+                verificationStatus: autoVerifyStatus,
               }),
               ipAddress,
             },
@@ -236,8 +310,9 @@ export async function POST(req: Request) {
     return NextResponse.json({
       success: true,
       paymentAccount: account,
-      message:
-        "Payment settings saved successfully. New or updated accounts are submitted for Super-Admin review and verification.",
+      message: isAdmin
+        ? "Payment account saved and verified successfully by Super Admin! Advance bookings are now active for this salon."
+        : "Payment settings saved successfully. Submitted for Super-Admin review and verification.",
     });
   } catch (error: unknown) {
     console.error("POST /api/owner/payment-account error:", error);
